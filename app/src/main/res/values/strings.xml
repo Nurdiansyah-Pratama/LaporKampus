@@ -102,4 +102,40 @@
     <string name="detail_assigned_to_prefix">Ditugaskan ke Teknisi: %1$s</string>
     <string name="detail_not_assigned">Belum ditugaskan ke teknisi</string>
     <string name="error_report_not_found">Laporan tidak ditemukan atau telah dihapus.</string>
+
+    <!-- Sprint 4: Dasbor Admin & Tugas Teknisi -->
+    <string name="admin_dashboard_title">Dasbor Admin Kampus</string>
+    <string name="admin_dashboard_subtitle">Verifikasi laporan fasilitas, atur prioritas, dan tugaskan teknisi</string>
+    <string name="admin_stats_section_title">Ringkasan Jumlah Laporan per Status</string>
+    <string name="admin_filter_all">Semua (%1$d)</string>
+    <string name="admin_empty_reports">Belum ada laporan fasilitas yang masuk untuk filter ini.</string>
+    <string name="admin_btn_manage_report">Kelola &amp; Ubah Status</string>
+    <string name="admin_btn_view_detail">Lihat Detail &amp; Linimasa</string>
+    <string name="admin_dialog_title">Kelola Laporan</string>
+    <string name="admin_label_current_status">Status Saat Ini: %1$s</string>
+    <string name="admin_label_next_status">Pilih Transisi Status Berikutnya</string>
+    <string name="admin_no_valid_transition">Status laporan ini sudah bersifat akhir (%1$s) dan tidak dapat diubah lagi.</string>
+    <string name="admin_label_priority">Tingkat Prioritas</string>
+    <string name="admin_label_assign_tech">Tugaskan Teknisi (Pilih atau Ketik Nama/ID Teknisi)</string>
+    <string name="admin_hint_assign_tech">Contoh: Budi Teknisi Listrik (uid_teknisi)</string>
+    <string name="admin_label_history_note">Catatan Riwayat Status</string>
+    <string name="admin_hint_history_note">Contoh: Laporan telah diverifikasi dan ditugaskan ke teknisi gedung.</string>
+    <string name="admin_btn_save_changes">Simpan Perubahan</string>
+    <string name="admin_btn_cancel">Batal</string>
+    <string name="admin_update_success">Status, prioritas, dan penugasan laporan berhasil diperbarui.</string>
+    <string name="error_invalid_status_transition">Transisi status dari %1$s ke %2$s tidak diizinkan oleh aturan sistem.</string>
+    <string name="error_note_empty">Catatan perubahan status wajib diisi.</string>
+
+    <!-- Layar Tugas Teknisi -->
+    <string name="tech_tasks_title">Daftar Tugas Teknisi</string>
+    <string name="tech_tasks_subtitle">Laporan fasilitas yang ditugaskan kepada Anda atau sedang dikerjakan</string>
+    <string name="tech_empty_tasks">Belum ada tugas perbaikan fasilitas untuk Anda saat ini.</string>
+    <string name="tech_btn_mark_complete">Tandai Selesai + Unggah Foto Bukti</string>
+    <string name="tech_dialog_complete_title">Selesaikan Tugas Perbaikan</string>
+    <string name="tech_dialog_complete_desc">Unggah minimal 1 foto bukti penyelesaian pekerjaan dan tulis catatan hasil perbaikan.</string>
+    <string name="tech_label_completion_note">Catatan Penyelesaian Pekerjaan</string>
+    <string name="tech_hint_completion_note">Contoh: Lampu koridor dan ballast telah diganti dengan unit baru dan menyala normal.</string>
+    <string name="tech_btn_submit_completion">Kirim Bukti &amp; Tandai SELESAI</string>
+    <string name="tech_complete_success">Tugas berhasil ditandai SELESAI beserta foto bukti perbaikan.</string>
+    <string name="error_tech_photo_required">Wajib melampirkan minimal 1 foto bukti hasil perbaikan.</string>
 </resources>

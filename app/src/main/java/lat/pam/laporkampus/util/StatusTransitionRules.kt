@@ -29,4 +29,16 @@ object StatusTransitionRules {
     fun nextValidStatuses(current: ReportStatus): Set<ReportStatus> {
         return allowedTransitions[current] ?: emptySet()
     }
+
+    /**
+     * Menghitung jumlah laporan untuk setiap [ReportStatus] (digunakan pada Dasbor Admin).
+     */
+    fun countByStatus(reports: List<lat.pam.laporkampus.data.model.Report>): Map<ReportStatus, Int> {
+        val counts = ReportStatus.entries.associateWith { 0 }.toMutableMap()
+        for (report in reports) {
+            val status = report.statusEnum
+            counts[status] = (counts[status] ?: 0) + 1
+        }
+        return counts
+    }
 }

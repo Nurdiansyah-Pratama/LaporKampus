@@ -89,4 +89,20 @@ class ExampleUnitTest {
         assertFalse(forAdmin.contains("uid-mahasiswa-123"))
         assertFalse(forTech.contains("uid-mahasiswa-123"))
     }
+
+    @Test
+    fun statusTransitionRules_countsReportsByStatusAccurately() {
+        val sampleReports = listOf(
+            lat.pam.laporkampus.data.model.Report(id = "1", status = ReportStatus.DITERIMA.name),
+            lat.pam.laporkampus.data.model.Report(id = "2", status = ReportStatus.DITERIMA.name),
+            lat.pam.laporkampus.data.model.Report(id = "3", status = ReportStatus.DIVERIFIKASI.name),
+            lat.pam.laporkampus.data.model.Report(id = "4", status = ReportStatus.SELESAI.name)
+        )
+        val counts = StatusTransitionRules.countByStatus(sampleReports)
+        assertEquals(2, counts[ReportStatus.DITERIMA])
+        assertEquals(1, counts[ReportStatus.DIVERIFIKASI])
+        assertEquals(0, counts[ReportStatus.DIKERJAKAN])
+        assertEquals(1, counts[ReportStatus.SELESAI])
+        assertEquals(0, counts[ReportStatus.DITOLAK])
+    }
 }

@@ -14,6 +14,9 @@ import lat.pam.laporkampus.data.model.Report
 import lat.pam.laporkampus.data.model.ReportHistory
 import lat.pam.laporkampus.data.model.ReportPriority
 import lat.pam.laporkampus.data.model.ReportStatus
+import lat.pam.laporkampus.data.model.UserProfile
+import lat.pam.laporkampus.data.model.UserRole
+import lat.pam.laporkampus.util.StatusTransitionRules
 import java.util.Locale
 import java.util.UUID
 
@@ -48,6 +51,47 @@ interface ReportRepository {
      * Mengamati subkoleksi `reports/{reportId}/history` secara real-time, diurutkan berdasarkan waktu.
      */
     fun observeReportHistory(reportId: String): Flow<List<ReportHistory>>
+
+    /**
+     * Mengamati daftar laporan non-sensitif (`isSensitive == false`) untuk Dasbor Admin secara real-time.
+     * Aturan Keamanan #2: Laporan dengan `isSensitive = true` hanya boleh dibaca oleh SATGAS dan pelapornya.
+     */
+    fun observeAdminReports(): Flow<List<Report>>
+
+    /**
+     * Mengamati daftar pengguna dengan peran `TEKNISI` untuk mempermudah penugasan oleh Admin.
+     */
+    fun observeTechnicians(): Flow<List<UserProfile>>
+
+    /**
+     * Mengamati daftar tugas untuk Teknisi (laporan non-sensitif yang ditugaskan kepadanya
+     * atau berstatus `DIVERIFIKASI` / `DIKERJAKAN` / `SELESAI`).
+     */
+    fun observeTechnicianTasks(technicianId: String, technicianName: String): Flow<List<Report>>
+
+    /**
+     * Admin memverifikasi, mengatur prioritas, menugaskan teknisi, dan/atau mengubah status laporan
+     * (divalidasi dengan [StatusTransitionRules]). Mencatat perubahan di subkoleksi `history`.
+     */
+    suspend fun updateReportByAdmin(
+        report: Report,
+        newStatus: ReportStatus,
+        newPriority: ReportPriority,
+        assignedTo: String,
+        catatan: String,
+        adminName: String
+    ): Result<Unit>
+
+    /**
+     * Teknisi menyelesaikan tugas perbaikan dengan mengunggah foto bukti penyelesaian ke Storage
+     * dan mengubah status laporan menjadi `SELESAI` (atau `DIKERJAKAN` -> `SELESAI`) beserta catatan `history`.
+     */
+    suspend fun completeTaskByTechnician(
+        report: Report,
+        completionPhotoUris: List<Uri>,
+        catatan: String,
+        technicianName: String
+    ): Result<Unit>
 }
 
 /**
@@ -213,5 +257,209 @@ class FirebaseReportRepository(
             }
 
         awaitClose { listener.remove() }
+    }
+
+    override fun observeAdminReports(): Flow<List<Report>> = callbackFlow {
+        val listener = firestore.collection(FirestoreCollections.REPORTS)
+            .whereEqualTo("isSensitive", false)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
+                val reports = snapshot?.documents
+                    ?.map { doc -> Report.fromFirestoreMap(doc.id, doc.data) }
+                    ?.filter { !it.isSensitive }
+                    ?.sortedByDescending { it.createdAt.seconds }
+                    ?: emptyList()
+                trySend(reports)
+            }
+
+        awaitClose { listener.remove() }
+    }
+
+    override fun observeTechnicians(): Flow<List<UserProfile>> = callbackFlow {
+        val listener = firestore.collection(FirestoreCollections.USERS)
+            .whereEqualTo("peran", UserRole.TEKNISI.name)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(emptyList())
+                    return@addSnapshotListener
+                }
+                val techs = snapshot?.documents
+                    ?.map { doc -> UserProfile.fromFirestoreMap(doc.id, doc.data) }
+                    ?: emptyList()
+                trySend(techs)
+            }
+
+        awaitClose { listener.remove() }
+    }
+
+    override fun observeTechnicianTasks(
+        technicianId: String,
+        technicianName: String
+    ): Flow<List<Report>> = callbackFlow {
+        val listener = firestore.collection(FirestoreCollections.REPORTS)
+            .whereEqualTo("isSensitive", false)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
+                val allNonSensitive = snapshot?.documents
+                    ?.map { doc -> Report.fromFirestoreMap(doc.id, doc.data) }
+                    ?.filter { !it.isSensitive }
+                    ?: emptyList()
+
+                // Tampilkan laporan yang ditugaskan ke teknisi ini ATAU laporan yang sudah diverifikasi/dikerjakan
+                val tasks = allNonSensitive.filter { report ->
+                    val assignedMatches = report.assignedTo.isNotBlank() && (
+                        report.assignedTo.contains(technicianId, ignoreCase = true) ||
+                            (technicianName.isNotBlank() && report.assignedTo.contains(technicianName, ignoreCase = true))
+                        )
+                    val actionableStatus = report.statusEnum == ReportStatus.DIVERIFIKASI ||
+                        report.statusEnum == ReportStatus.DIKERJAKAN
+                    assignedMatches || actionableStatus
+                }.sortedByDescending { it.updatedAt.seconds }
+
+                trySend(tasks)
+            }
+
+        awaitClose { listener.remove() }
+    }
+
+    override suspend fun updateReportByAdmin(
+        report: Report,
+        newStatus: ReportStatus,
+        newPriority: ReportPriority,
+        assignedTo: String,
+        catatan: String,
+        adminName: String
+    ): Result<Unit> {
+        val currentStatus = report.statusEnum
+        if (newStatus != currentStatus && !StatusTransitionRules.canTransition(currentStatus, newStatus)) {
+            return Result.failure(
+                IllegalArgumentException(
+                    "Transisi status dari ${currentStatus.label} ke ${newStatus.label} tidak diizinkan."
+                )
+            )
+        }
+
+        return try {
+            val now = Timestamp.now()
+            val reportRef = firestore.collection(FirestoreCollections.REPORTS).document(report.id)
+            val historyRef = reportRef.collection(FirestoreCollections.HISTORY).document()
+
+            val historyEntry = ReportHistory(
+                id = historyRef.id,
+                status = newStatus.name,
+                catatan = catatan.trim(),
+                oleh = "Admin ($adminName)",
+                waktu = now
+            )
+
+            firestore.runBatch { batch ->
+                batch.update(
+                    reportRef,
+                    mapOf(
+                        "status" to newStatus.name,
+                        "prioritas" to newPriority.name,
+                        "assignedTo" to assignedTo.trim(),
+                        "updatedAt" to now
+                    )
+                )
+                batch.set(historyRef, historyEntry.toFirestoreMap())
+            }.await()
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun completeTaskByTechnician(
+        report: Report,
+        completionPhotoUris: List<Uri>,
+        catatan: String,
+        technicianName: String
+    ): Result<Unit> {
+        val currentStatus = report.statusEnum
+        // Jika laporan masih berstatus DIVERIFIKASI, izinkan teknisi langsung memproses DIVERIFIKASI -> DIKERJAKAN -> SELESAI,
+        // atau jika sudah DIKERJAKAN maka transisi DIKERJAKAN -> SELESAI.
+        val canProceed = StatusTransitionRules.canTransition(currentStatus, ReportStatus.SELESAI) ||
+            (currentStatus == ReportStatus.DIVERIFIKASI &&
+                StatusTransitionRules.canTransition(ReportStatus.DIVERIFIKASI, ReportStatus.DIKERJAKAN) &&
+                StatusTransitionRules.canTransition(ReportStatus.DIKERJAKAN, ReportStatus.SELESAI))
+
+        if (!canProceed) {
+            return Result.failure(
+                IllegalArgumentException(
+                    "Laporan dengan status ${currentStatus.label} tidak dapat ditandai SELESAI."
+                )
+            )
+        }
+
+        if (completionPhotoUris.isEmpty()) {
+            return Result.failure(
+                IllegalArgumentException("Wajib melampirkan minimal 1 foto bukti hasil perbaikan.")
+            )
+        }
+
+        return try {
+            val uploadedProofUrls = mutableListOf<String>()
+            for ((index, uri) in completionPhotoUris.withIndex()) {
+                val fileName = "bukti_${report.id}_${index}_${UUID.randomUUID()}.jpg"
+                val proofRef = storage.reference
+                    .child(FirestoreCollections.STORAGE_COMPLETION_PHOTOS)
+                    .child(report.id)
+                    .child(fileName)
+
+                proofRef.putFile(uri).await()
+                val downloadUrl = proofRef.downloadUrl.await().toString()
+                uploadedProofUrls.add(downloadUrl)
+            }
+
+            val updatedPhotos = report.photoUrls + uploadedProofUrls
+            val now = Timestamp.now()
+            val reportRef = firestore.collection(FirestoreCollections.REPORTS).document(report.id)
+
+            firestore.runBatch { batch ->
+                // Jika sebelumnya masih DIVERIFIKASI, tambahkan jejak DIKERJAKAN terlebih dahulu agar urutan transisi utuh
+                if (currentStatus == ReportStatus.DIVERIFIKASI) {
+                    val inProgressHistoryRef = reportRef.collection(FirestoreCollections.HISTORY).document()
+                    val inProgressHistory = ReportHistory(
+                        id = inProgressHistoryRef.id,
+                        status = ReportStatus.DIKERJAKAN.name,
+                        catatan = "Teknisi mulai mengerjakan perbaikan di lapangan.",
+                        oleh = "Teknisi ($technicianName)",
+                        waktu = now
+                    )
+                    batch.set(inProgressHistoryRef, inProgressHistory.toFirestoreMap())
+                }
+
+                val doneHistoryRef = reportRef.collection(FirestoreCollections.HISTORY).document()
+                val doneHistory = ReportHistory(
+                    id = doneHistoryRef.id,
+                    status = ReportStatus.SELESAI.name,
+                    catatan = "${catatan.trim()} (Dilengkapi ${uploadedProofUrls.size} foto bukti perbaikan)",
+                    oleh = "Teknisi ($technicianName)",
+                    waktu = now
+                )
+
+                batch.update(
+                    reportRef,
+                    mapOf(
+                        "status" to ReportStatus.SELESAI.name,
+                        "photoUrls" to updatedPhotos,
+                        "updatedAt" to now
+                    )
+                )
+                batch.set(doneHistoryRef, doneHistory.toFirestoreMap())
+            }.await()
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 }

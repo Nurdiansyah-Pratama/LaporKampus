@@ -46,16 +46,20 @@ import kotlinx.coroutines.launch
 import lat.pam.laporkampus.R
 import lat.pam.laporkampus.data.model.UserProfile
 import lat.pam.laporkampus.data.model.UserRole
+import lat.pam.laporkampus.ui.admin.AdminDashboardScreen
 import lat.pam.laporkampus.ui.auth.LoginScreen
 import lat.pam.laporkampus.ui.auth.RegisterScreen
 import lat.pam.laporkampus.ui.components.AccessDeniedScreen
 import lat.pam.laporkampus.ui.components.FeaturePlaceholderScreen
 import lat.pam.laporkampus.ui.components.ProfileScreen
 import lat.pam.laporkampus.ui.report.CreateReportScreen
+import lat.pam.laporkampus.ui.technician.TechnicianTasksScreen
 import lat.pam.laporkampus.ui.tracking.MyReportsScreen
 import lat.pam.laporkampus.ui.tracking.ReportDetailScreen
+import lat.pam.laporkampus.viewmodel.AdminViewModel
 import lat.pam.laporkampus.viewmodel.AuthViewModel
 import lat.pam.laporkampus.viewmodel.CreateReportViewModel
+import lat.pam.laporkampus.viewmodel.TechnicianViewModel
 import lat.pam.laporkampus.viewmodel.TrackingViewModel
 
 /**
@@ -130,6 +134,8 @@ fun bottomNavItemsForRole(role: UserRole): List<BottomNavItem> {
 fun LaporKampusNavHost(
     authViewModel: AuthViewModel = viewModel(),
     trackingViewModel: TrackingViewModel = viewModel(),
+    adminViewModel: AdminViewModel = viewModel(),
+    technicianViewModel: TechnicianViewModel = viewModel(),
     navController: NavHostController = rememberNavController()
 ) {
     val authState by authViewModel.uiState.collectAsStateWithLifecycle()
@@ -340,10 +346,37 @@ fun LaporKampusNavHost(
                     targetRoute = ScreenRoute.AdminDashboard.route,
                     navController = navController
                 ) { user ->
-                    FeaturePlaceholderScreen(
-                        title = stringResource(id = R.string.nav_admin_dashboard),
-                        description = stringResource(id = R.string.placeholder_admin_desc),
-                        role = user.roleEnum
+                    LaunchedEffect(Unit) {
+                        adminViewModel.startObserving()
+                    }
+                    val adminState by adminViewModel.uiState.collectAsStateWithLifecycle()
+
+                    LaunchedEffect(adminState.updateSuccessMessage) {
+                        adminState.updateSuccessMessage?.let { msg ->
+                            snackbarHostState.showSnackbar(msg)
+                            adminViewModel.consumeMessages()
+                        }
+                    }
+
+                    AdminDashboardScreen(
+                        currentUser = user,
+                        uiState = adminState,
+                        onSelectStatusFilter = { status ->
+                            adminViewModel.onStatusFilterSelected(status)
+                        },
+                        onOpenDetail = { reportId ->
+                            navController.navigate(ScreenRoute.ReportDetail.createRoute(reportId))
+                        },
+                        onUpdateReport = { report, newStatus, newPriority, assignedTo, catatan ->
+                            adminViewModel.updateReport(
+                                report = report,
+                                newStatus = newStatus,
+                                newPriority = newPriority,
+                                assignedTo = assignedTo,
+                                catatan = catatan,
+                                adminName = user.nama.ifBlank { user.email }
+                            )
+                        }
                     )
                 }
             }
@@ -354,10 +387,35 @@ fun LaporKampusNavHost(
                     targetRoute = ScreenRoute.TechnicianTasks.route,
                     navController = navController
                 ) { user ->
-                    FeaturePlaceholderScreen(
-                        title = stringResource(id = R.string.nav_technician_tasks),
-                        description = stringResource(id = R.string.placeholder_technician_desc),
-                        role = user.roleEnum
+                    LaunchedEffect(user.id) {
+                        technicianViewModel.startObservingTasks(
+                            technicianId = user.id,
+                            technicianName = user.nama
+                        )
+                    }
+                    val techState by technicianViewModel.uiState.collectAsStateWithLifecycle()
+
+                    LaunchedEffect(techState.completionSuccessMessage) {
+                        techState.completionSuccessMessage?.let { msg ->
+                            snackbarHostState.showSnackbar(msg)
+                            technicianViewModel.consumeMessages()
+                        }
+                    }
+
+                    TechnicianTasksScreen(
+                        currentUser = user,
+                        uiState = techState,
+                        onOpenDetail = { reportId ->
+                            navController.navigate(ScreenRoute.ReportDetail.createRoute(reportId))
+                        },
+                        onCompleteTask = { report, proofPhotos, catatan ->
+                            technicianViewModel.completeTask(
+                                report = report,
+                                proofPhotoUris = proofPhotos,
+                                catatan = catatan,
+                                technicianName = user.nama.ifBlank { user.email }
+                            )
+                        }
                     )
                 }
             }
