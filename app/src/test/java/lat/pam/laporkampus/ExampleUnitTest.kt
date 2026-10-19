@@ -52,4 +52,19 @@ class ExampleUnitTest {
         assertFalse(RoleGuard.canAccess(UserRole.ADMIN, ScreenRoute.TechnicianTasks.route))
         assertTrue(RoleGuard.canAccess(UserRole.SATGAS, ScreenRoute.SatgasReports.route))
     }
+
+    @Test
+    fun reportFormValidator_validatesCategoryDescriptionAndFallbackLocation() {
+        assertTrue(lat.pam.laporkampus.util.ReportFormValidator.isValidCategory("Kelistrikan & Pencahayaan"))
+        assertFalse(lat.pam.laporkampus.util.ReportFormValidator.isValidCategory("   "))
+        assertTrue(lat.pam.laporkampus.util.ReportFormValidator.isValidDescription("Lampu koridor gedung B mati total sejak kemarin"))
+        assertFalse(lat.pam.laporkampus.util.ReportFormValidator.isValidDescription("Rusak"))
+
+        // Valid jika ada nama lokasi manual meskipun koordinat null (fallback peta/GPS gagal)
+        assertTrue(lat.pam.laporkampus.util.ReportFormValidator.isValidLocation("Gedung A Lt 2", null, null))
+        // Valid jika ada koordinat peta meskipun nama lokasi manual kosong
+        assertTrue(lat.pam.laporkampus.util.ReportFormValidator.isValidLocation("", -6.8915, 107.6107))
+        // Tidak valid jika keduanya kosong
+        assertFalse(lat.pam.laporkampus.util.ReportFormValidator.isValidLocation(" ", null, null))
+    }
 }
