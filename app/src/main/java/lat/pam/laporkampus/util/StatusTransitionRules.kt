@@ -31,6 +31,13 @@ object StatusTransitionRules {
     }
 
     /**
+     * Memeriksa apakah suatu status merupakan status akhir (terminal) yang tidak dapat diubah lagi.
+     */
+    fun isTerminal(status: ReportStatus): Boolean {
+        return nextValidStatuses(status).isEmpty()
+    }
+
+    /**
      * Menghitung jumlah laporan untuk setiap [ReportStatus] (digunakan pada Dasbor Admin).
      */
     fun countByStatus(reports: List<lat.pam.laporkampus.data.model.Report>): Map<ReportStatus, Int> {

@@ -1,0 +1,14 @@
+{
+  "name": "laporkampus-rules-tests",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Unit test untuk Firestore Security Rules LaporKampus menggunakan Firebase Emulator",
+  "scripts": {
+    "test": "mocha firestore.rules.test.js --timeout 15000"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^3.0.3",
+    "firebase": "^10.14.1",
+    "mocha": "^10.7.3"
+  }
+}
