@@ -4,4 +4,49 @@
     <string name="sprint0_subtitle">Aplikasi Pelaporan Fasilitas dan Keluhan Kampus</string>
     <string name="sprint0_status_ready">Lingkungan Dasar (Sprint 0) Siap</string>
     <string name="sprint0_config_notice">Terhubung ke Firebase &amp; Peta OpenStreetMap (OSMDroid). Siap melanjutkan ke Sprint 1.</string>
+
+    <!-- Autentikasi (Login & Registrasi) -->
+    <string name="auth_login_title">Masuk ke LaporKampus</string>
+    <string name="auth_login_subtitle">Silakan masuk menggunakan akun kampus Anda</string>
+    <string name="auth_register_title">Daftar Akun Mahasiswa</string>
+    <string name="auth_register_subtitle">Registrasi mandiri khusus untuk peran Mahasiswa</string>
+    <string name="auth_label_name">Nama Lengkap</string>
+    <string name="auth_label_email">Alamat Email</string>
+    <string name="auth_label_password">Kata Sandi</string>
+    <string name="auth_label_confirm_password">Konfirmasi Kata Sandi</string>
+    <string name="auth_btn_login">Masuk</string>
+    <string name="auth_btn_register">Daftar Sekarang</string>
+    <string name="auth_btn_logout">Keluar</string>
+    <string name="auth_to_register_prompt">Belum punya akun? Daftar sebagai Mahasiswa</string>
+    <string name="auth_to_login_prompt">Sudah punya akun? Masuk di sini</string>
+    <string name="auth_role_locked_info">Catatan Keamanan: Pendaftaran dari aplikasi otomatis menetapkan peran sebagai MAHASISWA. Peran ADMIN, TEKNISI, dan SATGAS hanya dapat ditetapkan oleh pengelola sistem.</string>
+
+    <!-- Validasi Input Auth -->
+    <string name="error_name_empty">Nama lengkap tidak boleh kosong</string>
+    <string name="error_email_invalid">Format alamat email tidak valid</string>
+    <string name="error_password_short">Kata sandi minimal 6 karakter</string>
+    <string name="error_password_mismatch">Konfirmasi kata sandi tidak cocok</string>
+    <string name="error_auth_generic">Gagal memproses autentikasi. Periksa kembali akun atau koneksi Anda.</string>
+
+    <!-- Navigasi Bawah & Header Peran -->
+    <string name="nav_create_report">Buat Laporan</string>
+    <string name="nav_my_reports">Laporan Saya</string>
+    <string name="nav_admin_dashboard">Dasbor Admin</string>
+    <string name="nav_technician_tasks">Tugas Teknisi</string>
+    <string name="nav_satgas_reports">Laporan Sensitif</string>
+    <string name="nav_profile">Profil</string>
+
+    <!-- Profil & Penjaga Rute -->
+    <string name="profile_title">Profil Pengguna</string>
+    <string name="profile_role_prefix">Peran Aktif: %1$s</string>
+    <string name="access_denied_title">Akses Ditolak</string>
+    <string name="access_denied_message">Peran Anda (%1$s) tidak memiliki izin untuk mengakses halaman ini.</string>
+    <string name="btn_back_to_home">Kembali ke Beranda Peran</string>
+
+    <!-- Placeholder Sprint Berikutnya -->
+    <string name="placeholder_create_report_desc">Formulir pembuatan laporan, pemilih foto, dan peta lokasi OpenStreetMap akan diimplementasikan pada Sprint 2.</string>
+    <string name="placeholder_my_reports_desc">Daftar laporan Anda dan timeline status real-time akan diimplementasikan pada Sprint 3.</string>
+    <string name="placeholder_admin_desc">Panel verifikasi laporan, pengaturan prioritas, dan penugasan teknisi akan diimplementasikan pada Sprint 4.</string>
+    <string name="placeholder_technician_desc">Daftar tugas penanganan fasilitas dan unggah bukti selesai akan diimplementasikan pada Sprint 4.</string>
+    <string name="placeholder_satgas_desc">Penanganan khusus laporan sensitif akan dilengkapi pada Sprint 5.</string>
 </resources>
