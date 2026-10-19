@@ -36,10 +36,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import kotlinx.coroutines.launch
 import lat.pam.laporkampus.R
 import lat.pam.laporkampus.data.model.UserProfile
@@ -50,8 +52,11 @@ import lat.pam.laporkampus.ui.components.AccessDeniedScreen
 import lat.pam.laporkampus.ui.components.FeaturePlaceholderScreen
 import lat.pam.laporkampus.ui.components.ProfileScreen
 import lat.pam.laporkampus.ui.report.CreateReportScreen
+import lat.pam.laporkampus.ui.tracking.MyReportsScreen
+import lat.pam.laporkampus.ui.tracking.ReportDetailScreen
 import lat.pam.laporkampus.viewmodel.AuthViewModel
 import lat.pam.laporkampus.viewmodel.CreateReportViewModel
+import lat.pam.laporkampus.viewmodel.TrackingViewModel
 
 /**
  * Definisi item pada Bottom Navigation yang disesuaikan menurut peran pengguna.
@@ -124,6 +129,7 @@ fun bottomNavItemsForRole(role: UserRole): List<BottomNavItem> {
 @Composable
 fun LaporKampusNavHost(
     authViewModel: AuthViewModel = viewModel(),
+    trackingViewModel: TrackingViewModel = viewModel(),
     navController: NavHostController = rememberNavController()
 ) {
     val authState by authViewModel.uiState.collectAsStateWithLifecycle()
@@ -262,10 +268,39 @@ fun LaporKampusNavHost(
                     targetRoute = ScreenRoute.MyReports.route,
                     navController = navController
                 ) { user ->
-                    FeaturePlaceholderScreen(
-                        title = stringResource(id = R.string.nav_my_reports),
-                        description = stringResource(id = R.string.placeholder_my_reports_desc),
-                        role = user.roleEnum
+                    LaunchedEffect(user.id) {
+                        trackingViewModel.startObservingMyReports(user.id)
+                    }
+                    val myReportsState by trackingViewModel.myReportsState.collectAsStateWithLifecycle()
+
+                    MyReportsScreen(
+                        uiState = myReportsState,
+                        onReportClick = { reportId ->
+                            navController.navigate(ScreenRoute.ReportDetail.createRoute(reportId))
+                        }
+                    )
+                }
+            }
+
+            composable(
+                route = ScreenRoute.ReportDetail.route,
+                arguments = listOf(navArgument("reportId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val reportId = backStackEntry.arguments?.getString("reportId").orEmpty()
+                GuardedScreen(
+                    currentUser = currentUser,
+                    targetRoute = ScreenRoute.ReportDetail.route,
+                    navController = navController
+                ) { user ->
+                    LaunchedEffect(reportId) {
+                        trackingViewModel.startObservingReportDetail(reportId)
+                    }
+                    val detailState by trackingViewModel.detailState.collectAsStateWithLifecycle()
+
+                    ReportDetailScreen(
+                        currentUser = user,
+                        uiState = detailState,
+                        onBackClick = { navController.popBackStack() }
                     )
                 }
             }

@@ -67,4 +67,26 @@ class ExampleUnitTest {
         // Tidak valid jika keduanya kosong
         assertFalse(lat.pam.laporkampus.util.ReportFormValidator.isValidLocation(" ", null, null))
     }
+
+    @Test
+    fun dateAndPrivacyUtils_hidesAnonymousReporterFromAdminAndTechnician() {
+        val anonymousReport = lat.pam.laporkampus.data.model.Report(
+            id = "rep-01",
+            reporterId = "uid-mahasiswa-123",
+            isAnonymous = true
+        )
+        // Admin dan Teknisi tidak boleh melihat reporterId asli jika isAnonymous = true
+        val forAdmin = lat.pam.laporkampus.util.DateAndPrivacyUtils.getVisibleReporterLabel(
+            report = anonymousReport,
+            viewerRole = UserRole.ADMIN,
+            viewerUserId = "uid-admin-1"
+        )
+        val forTech = lat.pam.laporkampus.util.DateAndPrivacyUtils.getVisibleReporterLabel(
+            report = anonymousReport,
+            viewerRole = UserRole.TEKNISI,
+            viewerUserId = "uid-tech-1"
+        )
+        assertFalse(forAdmin.contains("uid-mahasiswa-123"))
+        assertFalse(forTech.contains("uid-mahasiswa-123"))
+    }
 }

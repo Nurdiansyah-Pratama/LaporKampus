@@ -78,4 +78,28 @@
     <string name="error_report_description_short">Deskripsi laporan minimal 10 karakter</string>
     <string name="error_report_location_empty">Nama lokasi atau titik koordinat harus diisi</string>
     <string name="history_initial_note">Laporan baru dikirim oleh pelapor dan menunggu verifikasi.</string>
+
+    <!-- Sprint 3: Daftar Laporan Saya, Detail, & Timeline Status -->
+    <string name="my_reports_title">Laporan Saya</string>
+    <string name="my_reports_subtitle">Pantau perkembangan laporan fasilitas dan keluhan Anda secara langsung</string>
+    <string name="my_reports_empty_title">Belum Ada Laporan</string>
+    <string name="my_reports_empty_desc">Anda belum pernah mengirim laporan. Ketuk tab \"Buat Laporan\" untuk melaporkan kendala fasilitas kampus.</string>
+    <string name="badge_anonymous">Anonim</string>
+    <string name="badge_sensitive">Sensitif (Satgas)</string>
+    <string name="label_priority_prefix">Prioritas: %1$s</string>
+    <string name="label_location_prefix">Lokasi: %1$s</string>
+    <string name="label_created_at_prefix">Dilaporkan: %1$s</string>
+    <string name="detail_title">Detail Laporan</string>
+    <string name="detail_btn_back">Kembali</string>
+    <string name="detail_section_info">Informasi Laporan</string>
+    <string name="detail_section_photos">Foto Bukti Laporan</string>
+    <string name="detail_section_location">Lokasi Kejadian</string>
+    <string name="detail_section_timeline">Linimasa (Timeline) Status</string>
+    <string name="detail_timeline_empty">Belum ada riwayat perubahan status.</string>
+    <string name="detail_timeline_by_prefix">Oleh: %1$s</string>
+    <string name="detail_reporter_anonymous_hidden">Pelapor Anonim (Identitas Disembunyikan)</string>
+    <string name="detail_reporter_id_prefix">ID Pelapor: %1$s</string>
+    <string name="detail_assigned_to_prefix">Ditugaskan ke Teknisi: %1$s</string>
+    <string name="detail_not_assigned">Belum ditugaskan ke teknisi</string>
+    <string name="error_report_not_found">Laporan tidak ditemukan atau telah dihapus.</string>
 </resources>

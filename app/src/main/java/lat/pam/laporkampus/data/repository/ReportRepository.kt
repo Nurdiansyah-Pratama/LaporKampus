@@ -3,13 +3,18 @@ package lat.pam.laporkampus.data.repository
 import android.net.Uri
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
 import com.google.firebase.storage.FirebaseStorage
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import lat.pam.laporkampus.data.firebase.FirestoreCollections
 import lat.pam.laporkampus.data.model.Report
 import lat.pam.laporkampus.data.model.ReportHistory
 import lat.pam.laporkampus.data.model.ReportPriority
 import lat.pam.laporkampus.data.model.ReportStatus
+import java.util.Locale
 import java.util.UUID
 
 /**
@@ -28,6 +33,21 @@ interface ReportRepository {
         lng: Double?,
         namaLokasi: String
     ): Result<Report>
+
+    /**
+     * Mengamati daftar laporan milik pelapor tertentu (`reporterId`) secara real-time.
+     */
+    fun observeMyReports(reporterId: String): Flow<List<Report>>
+
+    /**
+     * Mengamati satu dokumen laporan berdasarkan [reportId] secara real-time.
+     */
+    fun observeReportById(reportId: String): Flow<Report?>
+
+    /**
+     * Mengamati subkoleksi `reports/{reportId}/history` secara real-time, diurutkan berdasarkan waktu.
+     */
+    fun observeReportHistory(reportId: String): Flow<List<ReportHistory>>
 }
 
 /**
@@ -71,7 +91,7 @@ class FirebaseReportRepository(
             val now = Timestamp.now()
             val resolvedLocationName = namaLokasi.trim().ifBlank {
                 if (lat != null && lng != null) {
-                    String.format(java.util.Locale.US, "Titik Peta (%.5f, %.5f)", lat, lng)
+                    String.format(Locale.US, "Titik Peta (%.5f, %.5f)", lat, lng)
                 } else {
                     "Lokasi Kampus"
                 }
@@ -120,5 +140,78 @@ class FirebaseReportRepository(
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    override fun observeMyReports(reporterId: String): Flow<List<Report>> = callbackFlow {
+        if (reporterId.isBlank()) {
+            trySend(emptyList())
+            close()
+            return@callbackFlow
+        }
+
+        val listener = firestore.collection(FirestoreCollections.REPORTS)
+            .whereEqualTo("reporterId", reporterId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
+                val reports = snapshot?.documents
+                    ?.map { doc -> Report.fromFirestoreMap(doc.id, doc.data) }
+                    ?.sortedByDescending { it.createdAt.seconds }
+                    ?: emptyList()
+                trySend(reports)
+            }
+
+        awaitClose { listener.remove() }
+    }
+
+    override fun observeReportById(reportId: String): Flow<Report?> = callbackFlow {
+        if (reportId.isBlank()) {
+            trySend(null)
+            close()
+            return@callbackFlow
+        }
+
+        val listener = firestore.collection(FirestoreCollections.REPORTS)
+            .document(reportId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
+                if (snapshot != null && snapshot.exists()) {
+                    trySend(Report.fromFirestoreMap(snapshot.id, snapshot.data))
+                } else {
+                    trySend(null)
+                }
+            }
+
+        awaitClose { listener.remove() }
+    }
+
+    override fun observeReportHistory(reportId: String): Flow<List<ReportHistory>> = callbackFlow {
+        if (reportId.isBlank()) {
+            trySend(emptyList())
+            close()
+            return@callbackFlow
+        }
+
+        val listener = firestore.collection(FirestoreCollections.REPORTS)
+            .document(reportId)
+            .collection(FirestoreCollections.HISTORY)
+            .orderBy("waktu", Query.Direction.ASCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
+                val historyList = snapshot?.documents
+                    ?.map { doc -> ReportHistory.fromFirestoreMap(doc.id, doc.data) }
+                    ?: emptyList()
+                trySend(historyList)
+            }
+
+        awaitClose { listener.remove() }
     }
 }
