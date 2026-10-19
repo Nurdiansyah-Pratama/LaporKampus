@@ -15,7 +15,7 @@
   - Cloud Firestore (Data pengguna, laporan, riwayat status, rating)
   - Firebase Storage (Unggah foto bukti laporan & penyelesaian)
   - Firebase Cloud Messaging / FCM (Notifikasi perubahan status)
-- **Peta & Lokasi**: Google Maps Compose + Fused Location Provider (beserta input lokasi manual sebagai fallback)
+- **Peta & Lokasi**: OpenStreetMap (`osmdroid-android`, open-source tanpa API key) + Fused Location Provider (beserta input lokasi manual sebagai fallback)
 - **Kamera & Gambar**: Photo Picker / CameraX + Coil Compose
 
 ---
@@ -30,7 +30,7 @@ lat.pam.laporkampus/
 │   └── firebase/       # Sumber data Firebase & konstanta koleksi
 ├── ui/
 │   ├── auth/           # Layar Login & Registrasi
-│   ├── report/         # Form pembuatan laporan, pemilih foto & lokasi peta
+│   ├── report/         # Form pembuatan laporan, pemilih foto & lokasi peta (OSM)
 │   ├── tracking/       # Daftar "Laporan Saya", detail laporan, timeline status & rating
 │   ├── admin/          # Dashboard Admin, verifikasi, penugasan teknisi, & statistik
 │   ├── technician/     # Daftar tugas teknisi & unggah bukti selesai
@@ -43,27 +43,19 @@ lat.pam.laporkampus/
 
 ---
 
-## Prasyarat & Konfigurasi Rahasia (Wajib Sebelum Sprint 1)
+## Prasyarat & Konfigurasi
 
-Demi keamanan, file kredensial **`google-services.json`** dan **`local.properties`** tidak pernah disimpan ke dalam repositori Git.
+Demi keamanan, file kredensial **`google-services.json`** dan **`local.properties`** telah dimasukkan ke dalam `.gitignore` agar tidak pernah bocor ke repositori Git.
 
-### 1. Menghubungkan Firebase (`google-services.json`)
-1. Buka [Firebase Console](https://console.firebase.google.com/) dan buat proyek baru (misalnya `lapor-kampus`).
-2. Tambahkan aplikasi Android dengan **Package Name**: `lat.pam.laporkampus`.
-3. Unduh file `google-services.json` dan letakkan di dalam folder modul **`app/`** (`app/google-services.json`).
-4. Aktifkan layanan berikut di Firebase Console:
-   - **Authentication** -> Sign-in method -> Aktifkan **Email/Password**.
-   - **Cloud Firestore** -> Buat database.
-   - **Storage** -> Aktifkan Firebase Storage.
+### 1. Konfigurasi Firebase (`app/google-services.json`)
+- File `app/google-services.json` untuk package `lat.pam.laporkampus` sudah terpasang secara lokal.
+- Pastikan di [Firebase Console](https://console.firebase.google.com/) layanan berikut telah diaktifkan:
+  - **Authentication** -> Sign-in method -> **Email/Password**
+  - **Cloud Firestore**
+  - **Firebase Storage**
 
-### 2. Mengatur Google Maps API Key (`local.properties`)
-1. Buat atau salin **Maps SDK for Android API Key** dari [Google Cloud Console](https://console.cloud.google.com/).
-2. Buka file `local.properties` di root proyek.
-3. Tambahkan baris berikut di bagian bawah file:
-   ```properties
-   MAPS_API_KEY=ISI_DENGAN_API_KEY_GOOGLE_MAPS_ANDA
-   ```
-4. Script `app/build.gradle.kts` secara otomatis meneruskan nilai `MAPS_API_KEY` ke `AndroidManifest.xml` melalui `manifestPlaceholders`.
+### 2. Peta Open-Source OpenStreetMap (OSMDroid)
+- Proyek ini menggunakan **OpenStreetMap (`osmdroid-android`)** serta Nominatim reverse-geocoding yang bersifat open-source dan gratis, sehingga **tidak memerlukan Google Maps API Key**.
 
 ---
 

@@ -1,23 +1,8 @@
-import java.util.Properties
-
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.google.services)
 }
-
-// Terapkan plugin google-services secara otomatis apabila file google-services.json sudah tersedia
-if (file("google-services.json").exists()) {
-    apply(plugin = "com.google.gms.google-services")
-}
-
-// Baca MAPS_API_KEY dari local.properties tanpa membocorkannya ke kode sumber
-val localProperties = Properties().apply {
-    val localPropsFile = rootProject.file("local.properties")
-    if (localPropsFile.exists()) {
-        localPropsFile.inputStream().use { load(it) }
-    }
-}
-val mapsApiKey: String = localProperties.getProperty("MAPS_API_KEY") ?: ""
 
 android {
     namespace = "lat.pam.laporkampus"
@@ -33,7 +18,6 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
     }
 
     buildTypes {
@@ -79,9 +63,8 @@ dependencies {
     implementation(libs.firebase.storage)
     implementation(libs.firebase.messaging)
 
-    // Google Maps & Location
-    implementation(libs.maps.compose)
-    implementation(libs.play.services.maps)
+    // OpenStreetMap (OSMDroid) & Location
+    implementation(libs.osmdroid.android)
     implementation(libs.play.services.location)
 
     // Image Loading & CameraX

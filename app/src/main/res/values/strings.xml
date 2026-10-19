@@ -3,5 +3,5 @@
     <string name="sprint0_title">LaporKampus</string>
     <string name="sprint0_subtitle">Aplikasi Pelaporan Fasilitas dan Keluhan Kampus</string>
     <string name="sprint0_status_ready">Lingkungan Dasar (Sprint 0) Siap</string>
-    <string name="sprint0_config_notice">Pastikan file google-services.json dan MAPS_API_KEY di local.properties telah dikonfigurasi sebelum masuk ke Sprint 1.</string>
+    <string name="sprint0_config_notice">Terhubung ke Firebase &amp; Peta OpenStreetMap (OSMDroid). Siap melanjutkan ke Sprint 1.</string>
 </resources>
