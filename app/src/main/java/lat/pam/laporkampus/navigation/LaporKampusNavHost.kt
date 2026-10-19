@@ -1,5 +1,9 @@
 package lat.pam.laporkampus.navigation
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -31,6 +35,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -44,13 +49,14 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import kotlinx.coroutines.launch
 import lat.pam.laporkampus.R
+import lat.pam.laporkampus.data.firebase.StatusNotificationHelper
 import lat.pam.laporkampus.data.model.UserProfile
 import lat.pam.laporkampus.data.model.UserRole
 import lat.pam.laporkampus.ui.admin.AdminDashboardScreen
+import lat.pam.laporkampus.ui.admin.SatgasReportsScreen
 import lat.pam.laporkampus.ui.auth.LoginScreen
 import lat.pam.laporkampus.ui.auth.RegisterScreen
 import lat.pam.laporkampus.ui.components.AccessDeniedScreen
-import lat.pam.laporkampus.ui.components.FeaturePlaceholderScreen
 import lat.pam.laporkampus.ui.components.ProfileScreen
 import lat.pam.laporkampus.ui.report.CreateReportScreen
 import lat.pam.laporkampus.ui.technician.TechnicianTasksScreen
@@ -59,6 +65,7 @@ import lat.pam.laporkampus.ui.tracking.ReportDetailScreen
 import lat.pam.laporkampus.viewmodel.AdminViewModel
 import lat.pam.laporkampus.viewmodel.AuthViewModel
 import lat.pam.laporkampus.viewmodel.CreateReportViewModel
+import lat.pam.laporkampus.viewmodel.SatgasViewModel
 import lat.pam.laporkampus.viewmodel.TechnicianViewModel
 import lat.pam.laporkampus.viewmodel.TrackingViewModel
 
@@ -136,13 +143,30 @@ fun LaporKampusNavHost(
     trackingViewModel: TrackingViewModel = viewModel(),
     adminViewModel: AdminViewModel = viewModel(),
     technicianViewModel: TechnicianViewModel = viewModel(),
+    satgasViewModel: SatgasViewModel = viewModel(),
     navController: NavHostController = rememberNavController()
 ) {
+    val context = LocalContext.current
     val authState by authViewModel.uiState.collectAsStateWithLifecycle()
     val currentUser = authState.currentUser
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     val submitSuccessMsg = stringResource(id = R.string.report_submit_success)
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = { }
+    )
+
+    LaunchedEffect(currentUser?.id) {
+        if (currentUser != null) {
+            StatusNotificationHelper.ensureNotificationChannel(context)
+            StatusNotificationHelper.refreshAndSaveFcmToken()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
 
     if (authState.isCheckingSession) {
         Box(
@@ -279,6 +303,26 @@ fun LaporKampusNavHost(
                     }
                     val myReportsState by trackingViewModel.myReportsState.collectAsStateWithLifecycle()
 
+                    LaunchedEffect(myReportsState.statusChangeEvent) {
+                        myReportsState.statusChangeEvent?.let { event ->
+                            StatusNotificationHelper.showSystemNotification(
+                                context = context,
+                                notificationId = event.reportId.hashCode(),
+                                title = context.getString(
+                                    R.string.notif_status_changed_title,
+                                    event.newStatusLabel
+                                ),
+                                body = context.getString(
+                                    R.string.notif_status_changed_body,
+                                    event.kategori,
+                                    event.namaLokasi.ifBlank { "-" },
+                                    event.newStatusLabel
+                                )
+                            )
+                            trackingViewModel.consumeStatusChangeEvent()
+                        }
+                    }
+
                     MyReportsScreen(
                         uiState = myReportsState,
                         onReportClick = { reportId ->
@@ -303,10 +347,24 @@ fun LaporKampusNavHost(
                     }
                     val detailState by trackingViewModel.detailState.collectAsStateWithLifecycle()
 
+                    LaunchedEffect(detailState.ratingSuccessMessage) {
+                        detailState.ratingSuccessMessage?.let { msg ->
+                            snackbarHostState.showSnackbar(msg)
+                            trackingViewModel.consumeRatingMessages()
+                        }
+                    }
+
                     ReportDetailScreen(
                         currentUser = user,
                         uiState = detailState,
-                        onBackClick = { navController.popBackStack() }
+                        onBackClick = { navController.popBackStack() },
+                        onSubmitRating = { report, nilai, komentar ->
+                            trackingViewModel.submitRating(
+                                report = report,
+                                nilai = nilai,
+                                komentar = komentar
+                            )
+                        }
                     )
                 }
             }
@@ -426,10 +484,36 @@ fun LaporKampusNavHost(
                     targetRoute = ScreenRoute.SatgasReports.route,
                     navController = navController
                 ) { user ->
-                    FeaturePlaceholderScreen(
-                        title = stringResource(id = R.string.nav_satgas_reports),
-                        description = stringResource(id = R.string.placeholder_satgas_desc),
-                        role = user.roleEnum
+                    LaunchedEffect(Unit) {
+                        satgasViewModel.startObservingSensitiveReports()
+                    }
+                    val satgasState by satgasViewModel.uiState.collectAsStateWithLifecycle()
+
+                    LaunchedEffect(satgasState.updateSuccessMessage) {
+                        satgasState.updateSuccessMessage?.let { msg ->
+                            snackbarHostState.showSnackbar(msg)
+                            satgasViewModel.consumeMessages()
+                        }
+                    }
+
+                    SatgasReportsScreen(
+                        currentUser = user,
+                        uiState = satgasState,
+                        onSelectStatusFilter = { status ->
+                            satgasViewModel.onStatusFilterSelected(status)
+                        },
+                        onOpenDetail = { reportId ->
+                            navController.navigate(ScreenRoute.ReportDetail.createRoute(reportId))
+                        },
+                        onUpdateSensitiveReport = { report, newStatus, newPriority, catatan ->
+                            satgasViewModel.updateSensitiveReport(
+                                report = report,
+                                newStatus = newStatus,
+                                newPriority = newPriority,
+                                catatan = catatan,
+                                satgasName = user.nama.ifBlank { user.email }
+                            )
+                        }
                     )
                 }
             }

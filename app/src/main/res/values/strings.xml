@@ -138,4 +138,29 @@
     <string name="tech_btn_submit_completion">Kirim Bukti &amp; Tandai SELESAI</string>
     <string name="tech_complete_success">Tugas berhasil ditandai SELESAI beserta foto bukti perbaikan.</string>
     <string name="error_tech_photo_required">Wajib melampirkan minimal 1 foto bukti hasil perbaikan.</string>
+
+    <!-- Sprint 5: Rating 1-5, Jalur Sensitif Satgas, & Notifikasi Status -->
+    <string name="rating_section_title">Penilaian Penanganan Laporan</string>
+    <string name="rating_prompt_subtitle">Laporan Anda telah SELESAI ditangani. Berikan penilaian (1–5 bintang) atas kualitas penanganan:</string>
+    <string name="rating_label_comment">Komentar / Masukan Tambahan (Opsional)</string>
+    <string name="rating_hint_comment">Contoh: Perbaikan sangat cepat dan lampu kembali berfungsi dengan baik, terima kasih.</string>
+    <string name="rating_btn_submit">Kirim Penilaian</string>
+    <string name="rating_submitted_badge">Terima kasih! Anda telah memberikan nilai %1$d / 5 bintang.</string>
+    <string name="rating_submit_success">Terima kasih! Penilaian Anda berhasil disimpan.</string>
+    <string name="error_rating_invalid">Nilai rating harus di antara 1 sampai 5 bintang.</string>
+
+    <!-- Layar Khusus Satgas (Laporan Sensitif) -->
+    <string name="satgas_screen_title">Panel Khusus Satgas (Laporan Sensitif)</string>
+    <string name="satgas_screen_subtitle">Akses rahasia terbatas khusus peran SATGAS dan pelapor terkait</string>
+    <string name="satgas_confidential_banner">Kerahaasiaan Dijamin: Laporan dengan tanda isSensitive = true hanya dapat dibaca dan ditindaklanjuti oleh Satgas.</string>
+    <string name="satgas_empty_reports">Belum ada laporan sensitif untuk filter status ini.</string>
+    <string name="satgas_btn_update_status">Tindak Lanjuti &amp; Ubah Status</string>
+    <string name="satgas_dialog_title">Tindak Lanjut Laporan Sensitif</string>
+    <string name="satgas_update_success">Status penanganan laporan sensitif berhasil diperbarui oleh Satgas.</string>
+
+    <!-- Notifikasi Perubahan Status (FCM & In-App Watcher) -->
+    <string name="notif_channel_name">Pembaruan Status Laporan</string>
+    <string name="notif_channel_desc">Notifikasi saat status laporan fasilitas/keluhan kampus Anda berubah</string>
+    <string name="notif_status_changed_title">Status Laporan Diperbarui: %1$s</string>
+    <string name="notif_status_changed_body">Laporan \"%1$s\" di %2$s kini berstatus %3$s.</string>
 </resources>

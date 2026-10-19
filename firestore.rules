@@ -1,0 +1,420 @@
+rules_version = '2';
+
+// ===============================================================
+// Assumed Data Model (Model Data Cloud Firestore - LaporKampus)
+// ===============================================================
+//
+// File aturan keamanan (Security Rules) ini mengasumsikan struktur data berikut:
+//
+// 1. Koleksi: users/{userId}
+//    ID Dokumen: UID dari Firebase Authentication
+//    Field:
+//      - id: string (wajib, immutable, harus sama dengan userId / request.auth.uid)
+//      - nama: string (wajib, 1..100 karakter) - nama lengkap pengguna
+//      - email: string (wajib, format email valid, <= 150 karakter) - alamat email kampus
+//      - peran: string (wajib, enum: 'MAHASISWA' | 'ADMIN' | 'TEKNISI' | 'SATGAS')
+//      - fcmToken: string (opsional, <= 512 karakter) - token notifikasi perangkat
+//
+// 2. Koleksi: reports/{reportId}
+//    ID Dokumen: Auto-ID dokumen laporan
+//    Field:
+//      - id: string (wajib, immutable, sama dengan reportId)
+//      - reporterId: string (wajib, immutable, UID pelapor == request.auth.uid saat dibuat)
+//      - isAnonymous: bool (wajib, immutable) - penanda laporan anonim di antarmuka publik/staf
+//      - isSensitive: bool (wajib, immutable) - laporan sensitif (hanya pelapor & SATGAS)
+//      - kategori: string (wajib, 1..100 karakter)
+//      - deskripsi: string (wajib, 1..2000 karakter)
+//      - photoUrls: list<string> (wajib, maks 10 URL foto bukti)
+//      - lat: number atau null (opsional/nullable, -90..90)
+//      - lng: number atau null (opsional/nullable, -180..180)
+//      - namaLokasi: string (wajib, 1..200 karakter)
+//      - status: string (wajib, enum: 'DITERIMA' | 'DIVERIFIKASI' | 'DIKERJAKAN' | 'SELESAI' | 'DITOLAK')
+//      - prioritas: string (wajib, enum: 'RENDAH' | 'SEDANG' | 'TINGGI' | 'DARURAT')
+//      - assignedTo: string (wajib, 0..150 karakter) - ID/nama teknisi yang ditugaskan
+//      - createdAt: timestamp (wajib, immutable)
+//      - updatedAt: timestamp (wajib)
+//
+// 3. Subkoleksi: reports/{reportId}/history/{historyId}
+//    ID Dokumen: Auto-ID entri riwayat status (bersifat immutable / append-only)
+//    Field:
+//      - status: string (wajib, enum status laporan)
+//      - catatan: string (wajib, 0..1000 karakter)
+//      - oleh: string (wajib, 1..150 karakter)
+//      - waktu: timestamp (wajib)
+//      - id: string (opsional, <= 100 karakter)
+//
+// 4. Koleksi: ratings/{ratingId}
+//    ID Dokumen: ID laporan (reportId) atau Auto-ID penilaian
+//    Field:
+//      - reportId: string (wajib, immutable, mengacu ke reports/{reportId})
+//      - nilai: number/int (wajib, rentang 1..5 inklusif)
+//      - komentar: string (wajib, 0..1000 karakter)
+//
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Fungsi Bantuan Umum (Helper Functions)
+    // ===============================================================
+
+    // Memeriksa apakah pengguna sudah login (terautentikasi)
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Memeriksa apakah pengguna adalah pemilik dokumen berdasarkan UID
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Memeriksa keberadaan seluruh field wajib pada dokumen yang dikirim
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    // Memastikan dokumen hanya memiliki field yang diizinkan (mencegah polusi skema)
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // Memastikan field yang bersifat immutable tidak diubah saat operasi update
+    function areImmutableFieldsUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    // Memvalidasi panjang string pada suatu nilai
+    function isValidString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    // Memvalidasi format dasar alamat email
+    function isValidEmail(email) {
+      return email is string &&
+        email.size() >= 3 &&
+        email.size() <= 150 &&
+        email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // Memvalidasi daftar (list) beserta batas ukuran maksimumnya
+    function isValidList(listData, maxSize) {
+      return listData is list && listData.size() <= maxSize;
+    }
+
+    // ===============================================================
+    // Fungsi Otorisasi Peran Pengguna (RBAC Helpers)
+    // ===============================================================
+
+    // Mengambil dokumen profil pengguna saat ini dari koleksi `users/{uid}`
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // Memeriksa apakah dokumen profil pengguna saat ini sudah terdaftar
+    function hasUserProfile() {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    // Memeriksa apakah pengguna memiliki peran tertentu di `users/{uid}`
+    function hasRole(roleName) {
+      return hasUserProfile() && getUserData().peran == roleName;
+    }
+
+    function isAdmin() {
+      return hasRole('ADMIN');
+    }
+
+    function isTeknisi() {
+      return hasRole('TEKNISI');
+    }
+
+    function isSatgas() {
+      return hasRole('SATGAS');
+    }
+
+    function isStaff() {
+      return hasUserProfile() && getUserData().peran in ['ADMIN', 'TEKNISI', 'SATGAS'];
+    }
+
+    // ===============================================================
+    // Validator Domain (Dipanggil pada CREATE maupun UPDATE)
+    // ===============================================================
+
+    // Validasi skema dokumen `users/{userId}`
+    function isValidUser(data) {
+      return hasRequiredFields(['id', 'nama', 'email', 'peran']) &&
+        hasOnlyAllowedFields(['id', 'nama', 'email', 'peran', 'fcmToken']) &&
+        isValidString(data.id, 1, 128) &&
+        isValidString(data.nama, 1, 100) &&
+        isValidEmail(data.email) &&
+        data.peran in ['MAHASISWA', 'ADMIN', 'TEKNISI', 'SATGAS'] &&
+        (!('fcmToken' in data) || isValidString(data.fcmToken, 0, 512));
+    }
+
+    // Validasi nilai koordinat lintang (latitude): boleh null atau angka -90..90
+    function isValidLat(data) {
+      return !('lat' in data) ||
+        data.lat == null ||
+        (data.lat is number && data.lat >= -90 && data.lat <= 90);
+    }
+
+    // Validasi nilai koordinat bujur (longitude): boleh null atau angka -180..180
+    function isValidLng(data) {
+      return !('lng' in data) ||
+        data.lng == null ||
+        (data.lng is number && data.lng >= -180 && data.lng <= 180);
+    }
+
+    // Validasi skema dokumen `reports/{reportId}`
+    function isValidReport(data) {
+      return hasRequiredFields([
+          'id', 'reporterId', 'isAnonymous', 'isSensitive',
+          'kategori', 'deskripsi', 'photoUrls', 'namaLokasi',
+          'status', 'prioritas', 'assignedTo', 'createdAt', 'updatedAt'
+        ]) &&
+        hasOnlyAllowedFields([
+          'id', 'reporterId', 'isAnonymous', 'isSensitive',
+          'kategori', 'deskripsi', 'photoUrls', 'lat', 'lng', 'namaLokasi',
+          'status', 'prioritas', 'assignedTo', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidString(data.id, 1, 128) &&
+        isValidString(data.reporterId, 1, 128) &&
+        data.isAnonymous is bool &&
+        data.isSensitive is bool &&
+        isValidString(data.kategori, 1, 100) &&
+        isValidString(data.deskripsi, 1, 2000) &&
+        isValidList(data.photoUrls, 10) &&
+        isValidLat(data) &&
+        isValidLng(data) &&
+        isValidString(data.namaLokasi, 1, 200) &&
+        data.status in ['DITERIMA', 'DIVERIFIKASI', 'DIKERJAKAN', 'SELESAI', 'DITOLAK'] &&
+        data.prioritas in ['RENDAH', 'SEDANG', 'TINGGI', 'DARURAT'] &&
+        isValidString(data.assignedTo, 0, 150) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    // Validasi aturan siklus transisi status laporan:
+    // - DITERIMA -> DIVERIFIKASI, DITOLAK (atau tetap DITERIMA saat hanya update prioritas/assignedTo)
+    // - DIVERIFIKASI -> DIKERJAKAN, DITOLAK, SELESAI (atau tetap DIVERIFIKASI)
+    // - DIKERJAKAN -> SELESAI (atau tetap DIKERJAKAN)
+    function isValidStatusTransition(oldStatus, newStatus) {
+      return (oldStatus == 'DITERIMA' && newStatus in ['DITERIMA', 'DIVERIFIKASI', 'DITOLAK']) ||
+        (oldStatus == 'DIVERIFIKASI' && newStatus in ['DIVERIFIKASI', 'DIKERJAKAN', 'DITOLAK', 'SELESAI']) ||
+        (oldStatus == 'DIKERJAKAN' && newStatus in ['DIKERJAKAN', 'SELESAI']);
+    }
+
+    // Validasi skema dokumen `reports/{reportId}/history/{historyId}`
+    function isValidHistory(data) {
+      return hasRequiredFields(['status', 'catatan', 'oleh', 'waktu']) &&
+        hasOnlyAllowedFields(['id', 'status', 'catatan', 'oleh', 'waktu']) &&
+        data.status in ['DITERIMA', 'DIVERIFIKASI', 'DIKERJAKAN', 'SELESAI', 'DITOLAK'] &&
+        isValidString(data.catatan, 0, 1000) &&
+        isValidString(data.oleh, 1, 150) &&
+        data.waktu is timestamp &&
+        (!('id' in data) || isValidString(data.id, 1, 128));
+    }
+
+    // Validasi skema dokumen `ratings/{ratingId}`
+    function isValidRating(data) {
+      return hasRequiredFields(['reportId', 'nilai', 'komentar']) &&
+        hasOnlyAllowedFields(['reportId', 'nilai', 'komentar']) &&
+        isValidString(data.reportId, 1, 128) &&
+        data.nilai is number &&
+        data.nilai >= 1 &&
+        data.nilai <= 5 &&
+        isValidString(data.komentar, 0, 1000);
+    }
+
+    // ===============================================================
+    // 1. Aturan Koleksi `users/{userId}`
+    // ===============================================================
+    match /users/{userId} {
+      // Pembacaan profil pengguna:
+      // - Pengguna dapat membaca profil miliknya sendiri
+      // - Staf (ADMIN, TEKNISI, SATGAS) dapat membaca profil pengguna
+      // - Pengguna terautentikasi dapat mencari daftar TEKNISI untuk keperluan penugasan
+      allow read: if isAuthenticated() && (
+        isOwner(userId) ||
+        isStaff() ||
+        resource.data.peran == 'TEKNISI'
+      );
+
+      // ATURAN KEAMANAN #1 (Kunci Registrasi Mandiri Peran):
+      // Registrasi dari aplikasi hanya diizinkan membuat dokumen milik sendiri (`request.auth.uid == userId`)
+      // dengan `peran == 'MAHASISWA'`. Pengguna TIDAK DAPAT memilih sendiri peran ADMIN, TEKNISI, atau SATGAS.
+      allow create: if isAuthenticated() &&
+        isValidUser(request.resource.data) &&
+        request.resource.data.id == userId &&
+        (
+          (isOwner(userId) && request.resource.data.peran == 'MAHASISWA') ||
+          isAdmin()
+        );
+
+      // Pembaruan profil pengguna:
+      // - Pemilik akun hanya boleh memperbarui profilnya (mis. `nama`, `fcmToken`) JIKA `peran` tidak berubah
+      //   (mencegah eskalasi hak akses mandiri).
+      // - Pengguna dengan peran ADMIN dapat memperbarui peran pengguna bila diperlukan.
+      allow update: if isAuthenticated() &&
+        isValidUser(request.resource.data) &&
+        request.resource.data.id == resource.data.id &&
+        (
+          (isOwner(userId) &&
+            request.resource.data.peran == resource.data.peran &&
+            request.resource.data.email == resource.data.email) ||
+          isAdmin()
+        );
+
+      allow delete: if isAdmin();
+    }
+
+    // ===============================================================
+    // 2. Aturan Koleksi `reports/{reportId}`
+    // ===============================================================
+    match /reports/{reportId} {
+
+      // Fungsi internal untuk memeriksa izin baca berdasarkan flag `isSensitive`
+      function canReadReportData(reportData) {
+        return isAuthenticated() && (
+          // Pelapor selalu dapat membaca laporannya sendiri
+          reportData.reporterId == request.auth.uid ||
+          // Jika laporan bersifat sensitif (`isSensitive == true`), HANYA SATGAS yang boleh membaca
+          // (ADMIN dan TEKNISI dilarang keras membaca laporan sensitif)
+          (reportData.isSensitive == true && isSatgas()) ||
+          // Jika laporan tidak sensitif (`isSensitive == false`), ADMIN, TEKNISI, dan SATGAS boleh membaca
+          (reportData.isSensitive == false && (isAdmin() || isTeknisi() || isSatgas()))
+        );
+      }
+
+      // ATURAN KEAMANAN #2 (Perlindungan Laporan Sensitif):
+      // - Laporan dengan `isSensitive == true` HANYA dapat dibaca (get, list) oleh pelapornya sendiri atau SATGAS.
+      // - Laporan dengan `isSensitive == false` dapat dibaca oleh pelapornya sendiri, ADMIN, TEKNISI, atau SATGAS.
+      allow read: if canReadReportData(resource.data);
+
+      // Pembuatan laporan baru:
+      // Setiap pengguna terautentikasi dapat membuat laporan baru asalkan:
+      // - `reporterId` sama dengan `request.auth.uid`
+      // - `status` awal wajib `'DITERIMA'`
+      // - Seluruh field memenuhi validasi skema `isValidReport`
+      allow create: if isAuthenticated() &&
+        isValidReport(request.resource.data) &&
+        request.resource.data.id == reportId &&
+        request.resource.data.reporterId == request.auth.uid &&
+        request.resource.data.status == 'DITERIMA';
+
+      // Pembaruan laporan & validasi transisi status:
+      // - Field `id`, `reporterId`, `isSensitive`, `isAnonymous`, dan `createdAt` bersifat immutable.
+      // - Transisi status wajib mengikuti alur DITERIMA -> DIVERIFIKASI -> DIKERJAKAN -> SELESAI (atau DITOLAK).
+      // - Untuk laporan `isSensitive == true`: hanya SATGAS yang dapat memperbarui status/prioritas/assignedTo.
+      // - Untuk laporan `isSensitive == false`: ADMIN atau TEKNISI (maupun SATGAS) dapat memperbarui.
+      allow update: if isAuthenticated() &&
+        isValidReport(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id', 'reporterId', 'isSensitive', 'isAnonymous', 'createdAt']) &&
+        isValidStatusTransition(resource.data.status, request.resource.data.status) &&
+        (
+          (resource.data.isSensitive == true && isSatgas()) ||
+          (resource.data.isSensitive == false && (isAdmin() || isTeknisi() || isSatgas()))
+        );
+
+      allow delete: if false;
+
+      // ===============================================================
+      // 3. Aturan Subkoleksi `reports/{reportId}/history/{historyId}`
+      // ===============================================================
+      match /history/{historyId} {
+
+        // Mengambil dokumen laporan induk (mendukung pembacaan saat laporan sudah ada)
+        function parentReport() {
+          return get(/databases/$(database)/documents/reports/$(reportId)).data;
+        }
+
+        // Mengambil dokumen laporan induk setelah transaksi/batch selesai
+        // (mendukung pembuatan laporan + history awal secara atomik melalui WriteBatch)
+        function parentReportAfter() {
+          return getAfter(/databases/$(database)/documents/reports/$(reportId)).data;
+        }
+
+        // Pembacaan riwayat diizinkan jika pengguna berhak membaca dokumen laporan induk `reports/{reportId}`
+        allow read: if isAuthenticated() &&
+          exists(/databases/$(database)/documents/reports/$(reportId)) &&
+          canReadReportData(parentReport());
+
+        // Pembuatan entri riwayat baru:
+        // - Oleh pelapor sendiri saat membuat entri awal berstatus `'DITERIMA'`
+        // - Oleh SATGAS (untuk laporan sensitif maupun non-sensitif)
+        // - Oleh ADMIN atau TEKNISI (hanya untuk laporan non-sensitif `isSensitive == false`)
+        allow create: if isAuthenticated() &&
+          isValidHistory(request.resource.data) &&
+          (
+            // Kasus 1: Pelapor membuat catatan riwayat awal 'DITERIMA' (termasuk saat WriteBatch pembuatan laporan)
+            (
+              request.resource.data.status == 'DITERIMA' &&
+              parentReportAfter().reporterId == request.auth.uid
+            ) ||
+            // Kasus 2: Laporan sensitif (`isSensitive == true`) hanya boleh ditambahkan riwayatnya oleh SATGAS
+            (
+              parentReportAfter().isSensitive == true &&
+              isSatgas()
+            ) ||
+            // Kasus 3: Laporan non-sensitif (`isSensitive == false`) boleh ditambahkan oleh ADMIN, TEKNISI, atau SATGAS
+            (
+              parentReportAfter().isSensitive == false &&
+              (isAdmin() || isTeknisi() || isSatgas())
+            )
+          );
+
+        // Dokumen riwayat bersifat kekal (immutable / append-only)
+        allow update, delete: if false;
+      }
+    }
+
+    // ===============================================================
+    // 4. Aturan Koleksi `ratings/{ratingId}`
+    // ===============================================================
+    match /ratings/{ratingId} {
+
+      // Mengambil dokumen laporan yang dirujuk oleh `reportId` pada penilaian
+      function getRatedReport(targetReportId) {
+        return get(/databases/$(database)/documents/reports/$(targetReportId)).data;
+      }
+
+      // Memastikan laporan yang dinilai benar-benar ada, milik pelapor (`request.auth.uid`),
+      // dan sudah berstatus `'SELESAI'`
+      function canRateReport(targetReportId) {
+        return exists(/databases/$(database)/documents/reports/$(targetReportId)) &&
+          getRatedReport(targetReportId).reporterId == request.auth.uid &&
+          getRatedReport(targetReportId).status == 'SELESAI';
+      }
+
+      // Pembacaan penilaian diizinkan bagi pengguna yang terautentikasi
+      allow read: if isAuthenticated();
+
+      // Pembuatan penilaian baru:
+      // Hanya diizinkan jika pengguna terautentikasi, `nilai` berada pada rentang 1..5,
+      // serta laporan `reports/$(request.resource.data.reportId)` adalah milik pengguna tersebut
+      // dan telah berstatus `'SELESAI'`.
+      allow create: if isAuthenticated() &&
+        isValidRating(request.resource.data) &&
+        canRateReport(request.resource.data.reportId);
+
+      // Pembaruan penilaian:
+      // Tetap memvalidasi skema `isValidRating`, menjaga `reportId` tidak berubah,
+      // dan memastikan kepemilikan laporan yang berstatus `'SELESAI'`.
+      allow update: if isAuthenticated() &&
+        isValidRating(request.resource.data) &&
+        request.resource.data.reportId == resource.data.reportId &&
+        canRateReport(request.resource.data.reportId);
+
+      allow delete: if false;
+    }
+
+    // ===============================================================
+    // Penolakan Default (Default Deny) untuk Seluruh Path Lainnya
+    // ===============================================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -120,3 +120,32 @@ data class ReportHistory(
         }
     }
 }
+
+/**
+ * Model dokumen penilaian pada koleksi `ratings/{reportId}` di Cloud Firestore.
+ * Field: `reportId`, `nilai` (1..5), `komentar`.
+ */
+data class Rating(
+    val reportId: String = "",
+    val nilai: Int = 5,
+    val komentar: String = ""
+) {
+    fun toFirestoreMap(): Map<String, Any> = mapOf(
+        "reportId" to reportId,
+        "nilai" to nilai,
+        "komentar" to komentar
+    )
+
+    companion object {
+        fun fromFirestoreMap(reportIdFallback: String, data: Map<String, Any?>?): Rating? {
+            if (data == null) return null
+            val nilaiNumber = (data["nilai"] as? Number)?.toInt() ?: return null
+            return Rating(
+                reportId = (data["reportId"] as? String)?.ifBlank { reportIdFallback } ?: reportIdFallback,
+                nilai = nilaiNumber.coerceIn(1, 5),
+                komentar = data["komentar"] as? String ?: ""
+            )
+        }
+    }
+}
+

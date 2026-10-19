@@ -105,4 +105,14 @@ class ExampleUnitTest {
         assertEquals(1, counts[ReportStatus.SELESAI])
         assertEquals(0, counts[ReportStatus.DITOLAK])
     }
+
+    @Test
+    fun ratingValidator_allows1To5OnlyWhenReportCompleted() {
+        assertTrue(lat.pam.laporkampus.util.ReportFormValidator.canSubmitRating(ReportStatus.SELESAI, 1))
+        assertTrue(lat.pam.laporkampus.util.ReportFormValidator.canSubmitRating(ReportStatus.SELESAI, 5))
+        assertFalse(lat.pam.laporkampus.util.ReportFormValidator.canSubmitRating(ReportStatus.SELESAI, 0))
+        assertFalse(lat.pam.laporkampus.util.ReportFormValidator.canSubmitRating(ReportStatus.SELESAI, 6))
+        assertFalse(lat.pam.laporkampus.util.ReportFormValidator.canSubmitRating(ReportStatus.DIKERJAKAN, 5))
+        assertFalse(lat.pam.laporkampus.util.ReportFormValidator.canSubmitRating(ReportStatus.DITERIMA, 4))
+    }
 }

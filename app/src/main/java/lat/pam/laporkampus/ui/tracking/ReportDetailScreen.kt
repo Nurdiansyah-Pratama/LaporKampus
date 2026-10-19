@@ -23,20 +23,30 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.StarOutline
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -44,8 +54,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
 import lat.pam.laporkampus.R
+import lat.pam.laporkampus.data.model.Rating
 import lat.pam.laporkampus.data.model.Report
 import lat.pam.laporkampus.data.model.ReportHistory
+import lat.pam.laporkampus.data.model.ReportStatus
 import lat.pam.laporkampus.data.model.UserProfile
 import lat.pam.laporkampus.util.DateAndPrivacyUtils
 import lat.pam.laporkampus.viewmodel.ReportDetailUiState
@@ -62,6 +74,7 @@ fun ReportDetailScreen(
     currentUser: UserProfile,
     uiState: ReportDetailUiState,
     onBackClick: () -> Unit,
+    onSubmitRating: (report: Report, nilai: Int, komentar: String) -> Unit = { _, _, _ -> },
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -236,6 +249,21 @@ fun ReportDetailScreen(
                     }
                 }
 
+                // Bagian Penilaian (Rating 1-5) setelah status SELESAI
+                if (report.statusEnum == ReportStatus.SELESAI) {
+                    val isReporter = report.reporterId == currentUser.id
+                    if (isReporter || uiState.existingRating != null) {
+                        RatingSectionCard(
+                            existingRating = uiState.existingRating,
+                            canGiveRating = isReporter && uiState.existingRating == null,
+                            isSubmitting = uiState.isSubmittingRating,
+                            onSubmit = { nilai, komentar ->
+                                onSubmitRating(report, nilai, komentar)
+                            }
+                        )
+                    }
+                }
+
                 // Bagian Foto Bukti Laporan (ditampilkan dengan Coil)
                 if (report.photoUrls.isNotEmpty()) {
                     Text(
@@ -339,6 +367,118 @@ fun ReportDetailScreen(
                                 isLast = index == uiState.history.lastIndex
                             )
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RatingSectionCard(
+    existingRating: Rating?,
+    canGiveRating: Boolean,
+    isSubmitting: Boolean,
+    onSubmit: (nilai: Int, komentar: String) -> Unit
+) {
+    var selectedStars by remember { mutableIntStateOf(existingRating?.nilai ?: 5) }
+    var commentText by remember { mutableStateOf(existingRating?.komentar ?: "") }
+    val starGold = Color(0xFFFFB300)
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                text = stringResource(id = R.string.rating_section_title),
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+
+            if (existingRating != null) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    for (star in 1..5) {
+                        Icon(
+                            imageVector = if (star <= existingRating.nilai) {
+                                Icons.Filled.Star
+                            } else {
+                                Icons.Outlined.StarOutline
+                            },
+                            contentDescription = null,
+                            tint = starGold,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                }
+                Text(
+                    text = stringResource(
+                        id = R.string.rating_submitted_badge,
+                        existingRating.nilai
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                if (existingRating.komentar.isNotBlank()) {
+                    Text(
+                        text = "\"${existingRating.komentar}\"",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            } else if (canGiveRating) {
+                Text(
+                    text = stringResource(id = R.string.rating_prompt_subtitle),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    for (star in 1..5) {
+                        IconButton(onClick = { selectedStars = star }) {
+                            Icon(
+                                imageVector = if (star <= selectedStars) {
+                                    Icons.Filled.Star
+                                } else {
+                                    Icons.Outlined.StarOutline
+                                },
+                                contentDescription = "$star Bintang",
+                                tint = starGold,
+                                modifier = Modifier.size(32.dp)
+                            )
+                        }
+                    }
+                }
+                OutlinedTextField(
+                    value = commentText,
+                    onValueChange = { commentText = it },
+                    label = { Text(stringResource(id = R.string.rating_label_comment)) },
+                    placeholder = { Text(stringResource(id = R.string.rating_hint_comment)) },
+                    minLines = 2,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Button(
+                    onClick = { onSubmit(selectedStars, commentText) },
+                    enabled = !isSubmitting,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (isSubmitting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
+                        Text(text = stringResource(id = R.string.rating_btn_submit))
                     }
                 }
             }

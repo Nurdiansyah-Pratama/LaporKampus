@@ -10,18 +10,20 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import lat.pam.laporkampus.data.firebase.FirestoreCollections
+import lat.pam.laporkampus.data.model.Rating
 import lat.pam.laporkampus.data.model.Report
 import lat.pam.laporkampus.data.model.ReportHistory
 import lat.pam.laporkampus.data.model.ReportPriority
 import lat.pam.laporkampus.data.model.ReportStatus
 import lat.pam.laporkampus.data.model.UserProfile
 import lat.pam.laporkampus.data.model.UserRole
+import lat.pam.laporkampus.util.ReportFormValidator
 import lat.pam.laporkampus.util.StatusTransitionRules
 import java.util.Locale
 import java.util.UUID
 
 /**
- * Kontrak repositori untuk pengelolaan laporan fasilitas dan keluhan kampus.
+ * Kontrak repositori untuk pengelolaan laporan fasilitas, jalur sensitif Satgas, dan penilaian (rating).
  */
 interface ReportRepository {
     suspend fun createReport(
@@ -37,42 +39,23 @@ interface ReportRepository {
         namaLokasi: String
     ): Result<Report>
 
-    /**
-     * Mengamati daftar laporan milik pelapor tertentu (`reporterId`) secara real-time.
-     */
     fun observeMyReports(reporterId: String): Flow<List<Report>>
-
-    /**
-     * Mengamati satu dokumen laporan berdasarkan [reportId] secara real-time.
-     */
     fun observeReportById(reportId: String): Flow<Report?>
-
-    /**
-     * Mengamati subkoleksi `reports/{reportId}/history` secara real-time, diurutkan berdasarkan waktu.
-     */
     fun observeReportHistory(reportId: String): Flow<List<ReportHistory>>
-
-    /**
-     * Mengamati daftar laporan non-sensitif (`isSensitive == false`) untuk Dasbor Admin secara real-time.
-     * Aturan Keamanan #2: Laporan dengan `isSensitive = true` hanya boleh dibaca oleh SATGAS dan pelapornya.
-     */
     fun observeAdminReports(): Flow<List<Report>>
-
-    /**
-     * Mengamati daftar pengguna dengan peran `TEKNISI` untuk mempermudah penugasan oleh Admin.
-     */
     fun observeTechnicians(): Flow<List<UserProfile>>
-
-    /**
-     * Mengamati daftar tugas untuk Teknisi (laporan non-sensitif yang ditugaskan kepadanya
-     * atau berstatus `DIVERIFIKASI` / `DIKERJAKAN` / `SELESAI`).
-     */
     fun observeTechnicianTasks(technicianId: String, technicianName: String): Flow<List<Report>>
 
     /**
-     * Admin memverifikasi, mengatur prioritas, menugaskan teknisi, dan/atau mengubah status laporan
-     * (divalidasi dengan [StatusTransitionRules]). Mencatat perubahan di subkoleksi `history`.
+     * Mengamati laporan sensitif (`isSensitive == true`) khusus untuk peran SATGAS.
      */
+    fun observeSensitiveReportsForSatgas(): Flow<List<Report>>
+
+    /**
+     * Mengamati penilaian (`ratings/{reportId}`) dari suatu laporan secara real-time.
+     */
+    fun observeRatingForReport(reportId: String): Flow<Rating?>
+
     suspend fun updateReportByAdmin(
         report: Report,
         newStatus: ReportStatus,
@@ -82,16 +65,32 @@ interface ReportRepository {
         adminName: String
     ): Result<Unit>
 
-    /**
-     * Teknisi menyelesaikan tugas perbaikan dengan mengunggah foto bukti penyelesaian ke Storage
-     * dan mengubah status laporan menjadi `SELESAI` (atau `DIKERJAKAN` -> `SELESAI`) beserta catatan `history`.
-     */
     suspend fun completeTaskByTechnician(
         report: Report,
         completionPhotoUris: List<Uri>,
         catatan: String,
         technicianName: String
     ): Result<Unit>
+
+    /**
+     * Satgas menindaklanjuti dan mengubah status laporan sensitif sesuai aturan transisi.
+     */
+    suspend fun updateSensitiveReportBySatgas(
+        report: Report,
+        newStatus: ReportStatus,
+        newPriority: ReportPriority,
+        catatan: String,
+        satgasName: String
+    ): Result<Unit>
+
+    /**
+     * Pelapor memberikan rating (1-5) dan komentar setelah laporan berstatus `SELESAI`.
+     */
+    suspend fun submitRating(
+        report: Report,
+        nilai: Int,
+        komentar: String
+    ): Result<Rating>
 }
 
 /**
@@ -118,7 +117,6 @@ class FirebaseReportRepository(
             val reportDocRef = firestore.collection(FirestoreCollections.REPORTS).document()
             val reportId = reportDocRef.id
 
-            // 1. Unggah seluruh foto bukti (jika ada) ke Firebase Storage
             val uploadedPhotoUrls = mutableListOf<String>()
             for ((index, uri) in photoUris.withIndex()) {
                 val fileName = "${reportId}_${index}_${UUID.randomUUID()}.jpg"
@@ -141,7 +139,6 @@ class FirebaseReportRepository(
                 }
             }
 
-            // 2. Siapkan dokumen laporan utama dengan status awal DITERIMA
             val report = Report(
                 id = reportId,
                 reporterId = reporterId,
@@ -160,7 +157,6 @@ class FirebaseReportRepository(
                 updatedAt = now
             )
 
-            // 3. Siapkan dokumen catatan awal di subkoleksi `reports/{id}/history`
             val historyDocRef = reportDocRef
                 .collection(FirestoreCollections.HISTORY)
                 .document()
@@ -174,7 +170,6 @@ class FirebaseReportRepository(
                 waktu = now
             )
 
-            // 4. Simpan laporan dan catatan history awal secara atomik menggunakan WriteBatch
             firestore.runBatch { batch ->
                 batch.set(reportDocRef, report.toFirestoreMap())
                 batch.set(historyDocRef, initialHistory.toFirestoreMap())
@@ -311,7 +306,6 @@ class FirebaseReportRepository(
                     ?.filter { !it.isSensitive }
                     ?: emptyList()
 
-                // Tampilkan laporan yang ditugaskan ke teknisi ini ATAU laporan yang sudah diverifikasi/dikerjakan
                 val tasks = allNonSensitive.filter { report ->
                     val assignedMatches = report.assignedTo.isNotBlank() && (
                         report.assignedTo.contains(technicianId, ignoreCase = true) ||
@@ -323,6 +317,49 @@ class FirebaseReportRepository(
                 }.sortedByDescending { it.updatedAt.seconds }
 
                 trySend(tasks)
+            }
+
+        awaitClose { listener.remove() }
+    }
+
+    override fun observeSensitiveReportsForSatgas(): Flow<List<Report>> = callbackFlow {
+        val listener = firestore.collection(FirestoreCollections.REPORTS)
+            .whereEqualTo("isSensitive", true)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
+                }
+                val reports = snapshot?.documents
+                    ?.map { doc -> Report.fromFirestoreMap(doc.id, doc.data) }
+                    ?.filter { it.isSensitive }
+                    ?.sortedByDescending { it.createdAt.seconds }
+                    ?: emptyList()
+                trySend(reports)
+            }
+
+        awaitClose { listener.remove() }
+    }
+
+    override fun observeRatingForReport(reportId: String): Flow<Rating?> = callbackFlow {
+        if (reportId.isBlank()) {
+            trySend(null)
+            close()
+            return@callbackFlow
+        }
+
+        val listener = firestore.collection(FirestoreCollections.RATINGS)
+            .document(reportId)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    trySend(null)
+                    return@addSnapshotListener
+                }
+                if (snapshot != null && snapshot.exists()) {
+                    trySend(Rating.fromFirestoreMap(reportId, snapshot.data))
+                } else {
+                    trySend(null)
+                }
             }
 
         awaitClose { listener.remove() }
@@ -384,8 +421,6 @@ class FirebaseReportRepository(
         technicianName: String
     ): Result<Unit> {
         val currentStatus = report.statusEnum
-        // Jika laporan masih berstatus DIVERIFIKASI, izinkan teknisi langsung memproses DIVERIFIKASI -> DIKERJAKAN -> SELESAI,
-        // atau jika sudah DIKERJAKAN maka transisi DIKERJAKAN -> SELESAI.
         val canProceed = StatusTransitionRules.canTransition(currentStatus, ReportStatus.SELESAI) ||
             (currentStatus == ReportStatus.DIVERIFIKASI &&
                 StatusTransitionRules.canTransition(ReportStatus.DIVERIFIKASI, ReportStatus.DIKERJAKAN) &&
@@ -424,7 +459,6 @@ class FirebaseReportRepository(
             val reportRef = firestore.collection(FirestoreCollections.REPORTS).document(report.id)
 
             firestore.runBatch { batch ->
-                // Jika sebelumnya masih DIVERIFIKASI, tambahkan jejak DIKERJAKAN terlebih dahulu agar urutan transisi utuh
                 if (currentStatus == ReportStatus.DIVERIFIKASI) {
                     val inProgressHistoryRef = reportRef.collection(FirestoreCollections.HISTORY).document()
                     val inProgressHistory = ReportHistory(
@@ -458,6 +492,81 @@ class FirebaseReportRepository(
             }.await()
 
             Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun updateSensitiveReportBySatgas(
+        report: Report,
+        newStatus: ReportStatus,
+        newPriority: ReportPriority,
+        catatan: String,
+        satgasName: String
+    ): Result<Unit> {
+        val currentStatus = report.statusEnum
+        if (newStatus != currentStatus && !StatusTransitionRules.canTransition(currentStatus, newStatus)) {
+            return Result.failure(
+                IllegalArgumentException(
+                    "Transisi status dari ${currentStatus.label} ke ${newStatus.label} tidak diizinkan."
+                )
+            )
+        }
+
+        return try {
+            val now = Timestamp.now()
+            val reportRef = firestore.collection(FirestoreCollections.REPORTS).document(report.id)
+            val historyRef = reportRef.collection(FirestoreCollections.HISTORY).document()
+
+            val historyEntry = ReportHistory(
+                id = historyRef.id,
+                status = newStatus.name,
+                catatan = catatan.trim(),
+                oleh = "Satgas ($satgasName)",
+                waktu = now
+            )
+
+            firestore.runBatch { batch ->
+                batch.update(
+                    reportRef,
+                    mapOf(
+                        "status" to newStatus.name,
+                        "prioritas" to newPriority.name,
+                        "assignedTo" to "Satgas ($satgasName)",
+                        "updatedAt" to now
+                    )
+                )
+                batch.set(historyRef, historyEntry.toFirestoreMap())
+            }.await()
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun submitRating(
+        report: Report,
+        nilai: Int,
+        komentar: String
+    ): Result<Rating> {
+        if (!ReportFormValidator.canSubmitRating(report.statusEnum, nilai)) {
+            return Result.failure(
+                IllegalArgumentException("Penilaian 1–5 hanya dapat diberikan pada laporan berstatus SELESAI.")
+            )
+        }
+
+        return try {
+            val rating = Rating(
+                reportId = report.id,
+                nilai = nilai,
+                komentar = komentar.trim()
+            )
+            firestore.collection(FirestoreCollections.RATINGS)
+                .document(report.id)
+                .set(rating.toFirestoreMap())
+                .await()
+            Result.success(rating)
         } catch (e: Exception) {
             Result.failure(e)
         }

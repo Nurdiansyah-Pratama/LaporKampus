@@ -23,4 +23,15 @@ object ReportFormValidator {
         val hasCoordinates = lat != null && lng != null
         return hasManualName || hasCoordinates
     }
+
+    /**
+     * Memvalidasi bahwa nilai rating berada pada rentang 1 sampai 5 (inklusif)
+     * dan laporan berstatus `SELESAI`.
+     */
+    fun canSubmitRating(
+        status: lat.pam.laporkampus.data.model.ReportStatus,
+        nilai: Int
+    ): Boolean {
+        return status == lat.pam.laporkampus.data.model.ReportStatus.SELESAI && nilai in 1..5
+    }
 }
