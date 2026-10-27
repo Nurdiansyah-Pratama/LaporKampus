@@ -151,4 +151,60 @@ class AdminViewModel(
             )
         }
     }
+
+    /**
+     * Memperbarui progres penanganan laporan oleh Petugas Admin/Satgas secara fleksibel:
+     * dari Menunggu -> Sedang Ditinjau (`DIVERIFIKASI`) -> Sedang Diproses (`DIKERJAKAN`) -> Sudah Selesai (`SELESAI`).
+     */
+    fun updateReportProgress(
+        report: Report,
+        newStatus: ReportStatus,
+        newPriority: ReportPriority = report.priorityEnum,
+        assignedTo: String = report.assignedTo,
+        catatan: String,
+        adminName: String
+    ) {
+        val resolvedNote = catatan.trim().ifEmpty {
+            when (newStatus) {
+                ReportStatus.DIVERIFIKASI -> "Laporan sedang ditinjau oleh petugas ($adminName)."
+                ReportStatus.DIKERJAKAN -> "Laporan sedang diproses / ditindaklanjuti di lapangan."
+                ReportStatus.SELESAI -> "Penanganan laporan telah selesai dilaksanakan."
+                ReportStatus.DITOLAK -> "Laporan ditolak setelah proses peninjauan."
+                ReportStatus.DITERIMA -> "Status laporan diperbarui oleh petugas."
+            }
+        }
+
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(isUpdating = true, errorMessage = null, updateSuccessMessage = null)
+            }
+            val result = reportRepository.updateReportByAdmin(
+                report = report,
+                newStatus = newStatus,
+                newPriority = newPriority,
+                assignedTo = assignedTo.ifBlank { "Tim Petugas ($adminName)" },
+                catatan = resolvedNote,
+                adminName = adminName
+            )
+            result.fold(
+                onSuccess = {
+                    _uiState.update {
+                        it.copy(
+                            isUpdating = false,
+                            updateSuccessMessage = "Progres laporan berhasil diubah ke: ${newStatus.label}"
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    _uiState.update {
+                        it.copy(
+                            isUpdating = false,
+                            errorMessage = error.localizedMessage
+                                ?: "Gagal memperbarui progres laporan."
+                        )
+                    }
+                }
+            )
+        }
+    }
 }

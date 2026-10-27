@@ -266,4 +266,56 @@ class ViewModelUnitTests {
         assertEquals(5, detailState.existingRating?.nilai)
         assertNotNull(detailState.ratingSuccessMessage)
     }
+
+    @Test
+    fun seedAdminLogin_1237050139_logsInAsAdmin_andCanUpdateProgressStages() {
+        val fakeAuthRepo = FakeAuthRepository()
+        val authViewModel = AuthViewModel(authRepository = fakeAuthRepo)
+
+        // Login menggunakan ID seed 1237050139 dan password admin123
+        authViewModel.login("1237050139", "admin123")
+        val loggedInUser = authViewModel.uiState.value.currentUser
+        assertNotNull(loggedInUser)
+        assertEquals(UserRole.ADMIN, loggedInUser?.roleEnum)
+
+        val initialReport = Report(
+            id = "rep-progres-1",
+            reporterId = "mhs-1",
+            kategori = "Air & Sanitasi (Toilet)",
+            status = ReportStatus.DITERIMA.name
+        )
+        val fakeReportRepo = FakeReportRepository(initialReports = listOf(initialReport))
+        val adminViewModel = AdminViewModel(reportRepository = fakeReportRepo)
+        adminViewModel.startObserving()
+
+        // Tahap 1: Ubah ke Sedang Ditinjau (DIVERIFIKASI)
+        adminViewModel.updateReportProgress(
+            report = adminViewModel.uiState.value.allReports.first(),
+            newStatus = ReportStatus.DIVERIFIKASI,
+            catatan = "",
+            adminName = "Petugas 1237050139"
+        )
+        assertEquals(ReportStatus.DIVERIFIKASI, adminViewModel.uiState.value.allReports.first().statusEnum)
+        assertEquals("Sedang Ditinjau", adminViewModel.uiState.value.allReports.first().statusEnum.label)
+
+        // Tahap 2: Ubah ke Sedang Diproses (DIKERJAKAN)
+        adminViewModel.updateReportProgress(
+            report = adminViewModel.uiState.value.allReports.first(),
+            newStatus = ReportStatus.DIKERJAKAN,
+            catatan = "",
+            adminName = "Petugas 1237050139"
+        )
+        assertEquals(ReportStatus.DIKERJAKAN, adminViewModel.uiState.value.allReports.first().statusEnum)
+        assertEquals("Sedang Diproses", adminViewModel.uiState.value.allReports.first().statusEnum.label)
+
+        // Tahap 3: Ubah ke Sudah Selesai (SELESAI)
+        adminViewModel.updateReportProgress(
+            report = adminViewModel.uiState.value.allReports.first(),
+            newStatus = ReportStatus.SELESAI,
+            catatan = "",
+            adminName = "Petugas 1237050139"
+        )
+        assertEquals(ReportStatus.SELESAI, adminViewModel.uiState.value.allReports.first().statusEnum)
+        assertEquals("Sudah Selesai", adminViewModel.uiState.value.allReports.first().statusEnum.label)
+    }
 }

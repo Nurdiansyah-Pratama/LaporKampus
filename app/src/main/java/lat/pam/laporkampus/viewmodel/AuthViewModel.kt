@@ -78,13 +78,13 @@ class AuthViewModel(
     }
 
     fun login(email: String, password: String) {
-        val emailValid = AuthInputValidator.isValidEmail(email)
+        val identifierValid = AuthInputValidator.isValidLoginIdentifier(email)
         val passwordValid = AuthInputValidator.isValidPassword(password)
 
-        if (!emailValid || !passwordValid) {
+        if (!identifierValid || !passwordValid) {
             _uiState.update {
                 it.copy(
-                    emailError = if (!emailValid) "Format alamat email tidak valid" else null,
+                    emailError = if (!identifierValid) "Masukkan email atau ID pengguna yang valid" else null,
                     passwordError = if (!passwordValid) "Kata sandi minimal 6 karakter" else null,
                     authErrorMessage = null
                 )

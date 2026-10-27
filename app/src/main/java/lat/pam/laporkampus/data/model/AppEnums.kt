@@ -19,12 +19,14 @@ enum class UserRole(val label: String) {
 
 /**
  * Status siklus hidup laporan fasilitas/keluhan kampus.
+ * Menampilkan label progres yang jelas bagi pelapor maupun petugas (Admin/Satgas/Teknisi):
+ * Menunggu -> Sedang Ditinjau -> Sedang Diproses -> Sudah Selesai (atau Ditolak).
  */
 enum class ReportStatus(val label: String) {
-    DITERIMA("Diterima"),
-    DIVERIFIKASI("Diverifikasi"),
-    DIKERJAKAN("Dikerjakan"),
-    SELESAI("Selesai"),
+    DITERIMA("Menunggu"),
+    DIVERIFIKASI("Sedang Ditinjau"),
+    DIKERJAKAN("Sedang Diproses"),
+    SELESAI("Sudah Selesai"),
     DITOLAK("Ditolak");
 
     companion object {

@@ -104,6 +104,11 @@ fun bottomNavItemsForRole(role: UserRole): List<BottomNavItem> {
                 icon = Icons.Default.AdminPanelSettings
             ),
             BottomNavItem(
+                route = ScreenRoute.SatgasReports.route,
+                labelRes = R.string.nav_satgas_reports,
+                icon = Icons.Default.Security
+            ),
+            BottomNavItem(
                 route = ScreenRoute.Profile.route,
                 labelRes = R.string.nav_profile,
                 icon = Icons.Default.Person
@@ -126,6 +131,11 @@ fun bottomNavItemsForRole(role: UserRole): List<BottomNavItem> {
                 route = ScreenRoute.SatgasReports.route,
                 labelRes = R.string.nav_satgas_reports,
                 icon = Icons.Default.Security
+            ),
+            BottomNavItem(
+                route = ScreenRoute.AdminDashboard.route,
+                labelRes = R.string.nav_admin_dashboard,
+                icon = Icons.Default.AdminPanelSettings
             ),
             BottomNavItem(
                 route = ScreenRoute.Profile.route,
@@ -426,7 +436,7 @@ fun LaporKampusNavHost(
                             navController.navigate(ScreenRoute.ReportDetail.createRoute(reportId))
                         },
                         onUpdateReport = { report, newStatus, newPriority, assignedTo, catatan ->
-                            adminViewModel.updateReport(
+                            adminViewModel.updateReportProgress(
                                 report = report,
                                 newStatus = newStatus,
                                 newPriority = newPriority,
@@ -506,7 +516,7 @@ fun LaporKampusNavHost(
                             navController.navigate(ScreenRoute.ReportDetail.createRoute(reportId))
                         },
                         onUpdateSensitiveReport = { report, newStatus, newPriority, catatan ->
-                            satgasViewModel.updateSensitiveReport(
+                            satgasViewModel.updateSensitiveReportProgress(
                                 report = report,
                                 newStatus = newStatus,
                                 newPriority = newPriority,

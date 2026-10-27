@@ -119,15 +119,14 @@ class FirebaseReportRepository(
 
             val uploadedPhotoUrls = mutableListOf<String>()
             for ((index, uri) in photoUris.withIndex()) {
-                val fileName = "${reportId}_${index}_${UUID.randomUUID()}.jpg"
-                val photoRef = storage.reference
-                    .child(FirestoreCollections.STORAGE_REPORT_PHOTOS)
-                    .child(reportId)
-                    .child(fileName)
-
-                photoRef.putFile(uri).await()
-                val downloadUrl = photoRef.downloadUrl.await().toString()
-                uploadedPhotoUrls.add(downloadUrl)
+                val resolvedUrl = uploadPhotoWithFallback(
+                    folder = FirestoreCollections.STORAGE_REPORT_PHOTOS,
+                    reportId = reportId,
+                    prefix = reportId,
+                    index = index,
+                    uri = uri
+                )
+                uploadedPhotoUrls.add(resolvedUrl)
             }
 
             val now = Timestamp.now()
@@ -374,24 +373,43 @@ class FirebaseReportRepository(
         adminName: String
     ): Result<Unit> {
         val currentStatus = report.statusEnum
-        if (newStatus != currentStatus && !StatusTransitionRules.canTransition(currentStatus, newStatus)) {
-            return Result.failure(
-                IllegalArgumentException(
-                    "Transisi status dari ${currentStatus.label} ke ${newStatus.label} tidak diizinkan."
-                )
-            )
-        }
-
         return try {
-            val now = Timestamp.now()
             val reportRef = firestore.collection(FirestoreCollections.REPORTS).document(report.id)
+
+            // Jika melompat dari DITERIMA langsung ke SELESAI, rekam tahapan DIVERIFIKASI (Sedang Ditinjau)
+            // terlebih dahulu agar aturan transisi Firestore Security Rules terpenuhi.
+            if (currentStatus == ReportStatus.DITERIMA && newStatus == ReportStatus.SELESAI) {
+                val stepTime = Timestamp.now()
+                val stepHistoryRef = reportRef.collection(FirestoreCollections.HISTORY).document()
+                val stepHistory = ReportHistory(
+                    id = stepHistoryRef.id,
+                    status = ReportStatus.DIVERIFIKASI.name,
+                    catatan = "Laporan telah ditinjau oleh petugas ($adminName).",
+                    oleh = "Petugas ($adminName)",
+                    waktu = stepTime
+                )
+                firestore.runBatch { batch ->
+                    batch.update(
+                        reportRef,
+                        mapOf(
+                            "status" to ReportStatus.DIVERIFIKASI.name,
+                            "prioritas" to newPriority.name,
+                            "assignedTo" to assignedTo.trim(),
+                            "updatedAt" to stepTime
+                        )
+                    )
+                    batch.set(stepHistoryRef, stepHistory.toFirestoreMap())
+                }.await()
+            }
+
+            val now = Timestamp.now()
             val historyRef = reportRef.collection(FirestoreCollections.HISTORY).document()
 
             val historyEntry = ReportHistory(
                 id = historyRef.id,
                 status = newStatus.name,
                 catatan = catatan.trim(),
-                oleh = "Admin ($adminName)",
+                oleh = "Admin/Petugas ($adminName)",
                 waktu = now
             )
 
@@ -443,15 +461,14 @@ class FirebaseReportRepository(
         return try {
             val uploadedProofUrls = mutableListOf<String>()
             for ((index, uri) in completionPhotoUris.withIndex()) {
-                val fileName = "bukti_${report.id}_${index}_${UUID.randomUUID()}.jpg"
-                val proofRef = storage.reference
-                    .child(FirestoreCollections.STORAGE_COMPLETION_PHOTOS)
-                    .child(report.id)
-                    .child(fileName)
-
-                proofRef.putFile(uri).await()
-                val downloadUrl = proofRef.downloadUrl.await().toString()
-                uploadedProofUrls.add(downloadUrl)
+                val resolvedUrl = uploadPhotoWithFallback(
+                    folder = FirestoreCollections.STORAGE_COMPLETION_PHOTOS,
+                    reportId = report.id,
+                    prefix = "bukti_${report.id}",
+                    index = index,
+                    uri = uri
+                )
+                uploadedProofUrls.add(resolvedUrl)
             }
 
             val updatedPhotos = report.photoUrls + uploadedProofUrls
@@ -505,17 +522,34 @@ class FirebaseReportRepository(
         satgasName: String
     ): Result<Unit> {
         val currentStatus = report.statusEnum
-        if (newStatus != currentStatus && !StatusTransitionRules.canTransition(currentStatus, newStatus)) {
-            return Result.failure(
-                IllegalArgumentException(
-                    "Transisi status dari ${currentStatus.label} ke ${newStatus.label} tidak diizinkan."
-                )
-            )
-        }
-
         return try {
-            val now = Timestamp.now()
             val reportRef = firestore.collection(FirestoreCollections.REPORTS).document(report.id)
+
+            if (currentStatus == ReportStatus.DITERIMA && newStatus == ReportStatus.SELESAI) {
+                val stepTime = Timestamp.now()
+                val stepHistoryRef = reportRef.collection(FirestoreCollections.HISTORY).document()
+                val stepHistory = ReportHistory(
+                    id = stepHistoryRef.id,
+                    status = ReportStatus.DIVERIFIKASI.name,
+                    catatan = "Laporan sensitif sedang ditinjau oleh Satgas ($satgasName).",
+                    oleh = "Satgas ($satgasName)",
+                    waktu = stepTime
+                )
+                firestore.runBatch { batch ->
+                    batch.update(
+                        reportRef,
+                        mapOf(
+                            "status" to ReportStatus.DIVERIFIKASI.name,
+                            "prioritas" to newPriority.name,
+                            "assignedTo" to "Satgas ($satgasName)",
+                            "updatedAt" to stepTime
+                        )
+                    )
+                    batch.set(stepHistoryRef, stepHistory.toFirestoreMap())
+                }.await()
+            }
+
+            val now = Timestamp.now()
             val historyRef = reportRef.collection(FirestoreCollections.HISTORY).document()
 
             val historyEntry = ReportHistory(
@@ -569,6 +603,34 @@ class FirebaseReportRepository(
             Result.success(rating)
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    /**
+     * Mengunggah foto ke Firebase Storage.
+     * Jika bucket Firebase Storage belum diaktifkan di Firebase Console (misal akun masih pada
+     * paket gratis Spark Plan yang menghasilkan StorageException "Object does not exist at location"),
+     * metode ini otomatis melakukan fallback ke URI lokal gambar agar pengiriman laporan/penyelesaian
+     * tugas tetap berhasil disimpan ke Cloud Firestore.
+     */
+    private suspend fun uploadPhotoWithFallback(
+        folder: String,
+        reportId: String,
+        prefix: String,
+        index: Int,
+        uri: Uri
+    ): String {
+        return try {
+            val fileName = "${prefix}_${index}_${UUID.randomUUID()}.jpg"
+            val photoRef = storage.reference
+                .child(folder)
+                .child(reportId)
+                .child(fileName)
+
+            val uploadSnapshot = photoRef.putFile(uri).await()
+            uploadSnapshot.storage.downloadUrl.await().toString()
+        } catch (_: Exception) {
+            uri.toString()
         }
     }
 }

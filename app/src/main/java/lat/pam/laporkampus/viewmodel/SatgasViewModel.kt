@@ -133,4 +133,58 @@ class SatgasViewModel(
             )
         }
     }
+
+    /**
+     * Memperbarui progres penanganan laporan sensitif oleh Satgas secara langsung:
+     * Sedang Ditinjau (`DIVERIFIKASI`) -> Sedang Diproses (`DIKERJAKAN`) -> Sudah Selesai (`SELESAI`).
+     */
+    fun updateSensitiveReportProgress(
+        report: Report,
+        newStatus: ReportStatus,
+        newPriority: ReportPriority = report.priorityEnum,
+        catatan: String,
+        satgasName: String
+    ) {
+        val resolvedNote = catatan.trim().ifEmpty {
+            when (newStatus) {
+                ReportStatus.DIVERIFIKASI -> "Laporan sensitif sedang ditinjau secara rahasia oleh Satgas ($satgasName)."
+                ReportStatus.DIKERJAKAN -> "Laporan sensitif sedang diproses dan ditindaklanjuti oleh Satgas."
+                ReportStatus.SELESAI -> "Penanganan laporan sensitif telah dinyatakan selesai oleh Satgas."
+                ReportStatus.DITOLAK -> "Laporan sensitif ditutup/ditolak setelah verifikasi Satgas."
+                ReportStatus.DITERIMA -> "Status laporan sensitif diperbarui oleh Satgas."
+            }
+        }
+
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(isUpdating = true, errorMessage = null, updateSuccessMessage = null)
+            }
+            val result = reportRepository.updateSensitiveReportBySatgas(
+                report = report,
+                newStatus = newStatus,
+                newPriority = newPriority,
+                catatan = resolvedNote,
+                satgasName = satgasName
+            )
+            result.fold(
+                onSuccess = {
+                    _uiState.update {
+                        it.copy(
+                            isUpdating = false,
+                            updateSuccessMessage = "Progres laporan sensitif diubah ke: ${newStatus.label}"
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    _uiState.update {
+                        it.copy(
+                            isUpdating = false,
+                            errorMessage = error.localizedMessage
+                                ?: "Gagal memperbarui laporan sensitif."
+                        )
+                    }
+                }
+            )
+        }
+    }
 }

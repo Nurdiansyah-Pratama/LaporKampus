@@ -43,6 +43,16 @@ class FakeAuthRepository(
         if (shouldFailAuth) {
             return Result.failure(IllegalArgumentException(failureMessage))
         }
+        if (lat.pam.laporkampus.util.AuthInputValidator.isSeedStaffCredentials(email, password)) {
+            val seedProfile = UserProfile(
+                id = lat.pam.laporkampus.util.AuthInputValidator.SEED_STAFF_ID,
+                nama = lat.pam.laporkampus.util.AuthInputValidator.SEED_STAFF_NAME,
+                email = lat.pam.laporkampus.util.AuthInputValidator.SEED_STAFF_EMAIL,
+                peran = UserRole.ADMIN.name
+            )
+            activeUser = seedProfile
+            return Result.success(seedProfile)
+        }
         val profile = activeUser ?: UserProfile(
             id = "uid-login-1",
             nama = "Pengguna Uji",

@@ -1,5 +1,6 @@
 package lat.pam.laporkampus.ui.admin
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,10 +12,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AdminPanelSettings
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.RateReview
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -25,10 +33,15 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -38,6 +51,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -49,7 +63,6 @@ import lat.pam.laporkampus.data.model.UserProfile
 import lat.pam.laporkampus.ui.tracking.SmallInfoChip
 import lat.pam.laporkampus.ui.tracking.StatusBadge
 import lat.pam.laporkampus.util.DateAndPrivacyUtils
-import lat.pam.laporkampus.util.StatusTransitionRules
 import lat.pam.laporkampus.viewmodel.AdminUiState
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -76,16 +89,73 @@ fun AdminDashboardScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text(
-            text = stringResource(id = R.string.admin_dashboard_title),
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Text(
-            text = stringResource(id = R.string.admin_dashboard_subtitle),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        // Banner Khusus Portal Petugas (Tampilan Berbeda dari Layar Pelapor)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primary
+            ),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.AdminPanelSettings,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimary
+                    )
+                    Text(
+                        text = stringResource(id = R.string.admin_portal_badge),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                }
+                Text(
+                    text = stringResource(id = R.string.admin_dashboard_title),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimary
+                )
+                Text(
+                    text = stringResource(id = R.string.admin_dashboard_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.9f)
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // 3 Indikator Progres Utama di Header Portal Petugas
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    StaffStatPill(
+                        label = ReportStatus.DIVERIFIKASI.label,
+                        count = uiState.statusCounts[ReportStatus.DIVERIFIKASI] ?: 0,
+                        modifier = Modifier.weight(1f)
+                    )
+                    StaffStatPill(
+                        label = ReportStatus.DIKERJAKAN.label,
+                        count = uiState.statusCounts[ReportStatus.DIKERJAKAN] ?: 0,
+                        modifier = Modifier.weight(1f)
+                    )
+                    StaffStatPill(
+                        label = ReportStatus.SELESAI.label,
+                        count = uiState.statusCounts[ReportStatus.SELESAI] ?: 0,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
 
         if (uiState.errorMessage != null) {
             Card(
@@ -103,15 +173,10 @@ fun AdminDashboardScreen(
             }
         }
 
-        // Hitungan sederhana (jumlah per status) di layar Admin
-        Text(
-            text = stringResource(id = R.string.admin_stats_section_title),
-            style = MaterialTheme.typography.titleLarge
-        )
-
+        // Filter Status Laporan
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             FilterChip(
@@ -178,6 +243,26 @@ fun AdminDashboardScreen(
                         AdminReportItemCard(
                             report = report,
                             viewer = currentUser,
+                            isUpdating = uiState.isUpdating,
+                            onQuickProgressChange = { targetStatus ->
+                                val autoNote = when (targetStatus) {
+                                    ReportStatus.DIVERIFIKASI ->
+                                        "Laporan sedang ditinjau oleh petugas (${currentUser.nama})."
+                                    ReportStatus.DIKERJAKAN ->
+                                        "Laporan sedang diproses / ditindaklanjuti oleh petugas."
+                                    ReportStatus.SELESAI ->
+                                        "Penanganan laporan telah selesai dilaksanakan."
+                                    else ->
+                                        "Status laporan diperbarui oleh petugas."
+                                }
+                                onUpdateReport(
+                                    report,
+                                    targetStatus,
+                                    report.priorityEnum,
+                                    report.assignedTo.ifBlank { currentUser.nama },
+                                    autoNote
+                                )
+                            },
                             onManageClick = { reportToManage = report },
                             onViewDetailClick = { onOpenDetail(report.id) }
                         )
@@ -202,11 +287,43 @@ fun AdminDashboardScreen(
     }
 }
 
+@Composable
+private fun StaffStatPill(
+    label: String,
+    count: Int,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.16f)
+    ) {
+        Column(
+            modifier = Modifier.padding(vertical = 8.dp, horizontal = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = count.toString(),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimary
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onPrimary
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AdminReportItemCard(
     report: Report,
     viewer: UserProfile,
+    isUpdating: Boolean,
+    onQuickProgressChange: (ReportStatus) -> Unit,
     onManageClick: () -> Unit,
     onViewDetailClick: () -> Unit
 ) {
@@ -215,10 +332,18 @@ private fun AdminReportItemCard(
         viewerRole = viewer.roleEnum,
         viewerUserId = viewer.id
     )
+    val currentStatus = report.statusEnum
+    val progressValue = when (currentStatus) {
+        ReportStatus.DITERIMA -> 0.15f
+        ReportStatus.DIVERIFIKASI -> 0.45f
+        ReportStatus.DIKERJAKAN -> 0.75f
+        ReportStatus.SELESAI -> 1.0f
+        ReportStatus.DITOLAK -> 1.0f
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         )
@@ -227,7 +352,7 @@ private fun AdminReportItemCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -240,8 +365,17 @@ private fun AdminReportItemCard(
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.weight(1f)
                 )
-                StatusBadge(status = report.statusEnum)
+                StatusBadge(status = currentStatus)
             }
+
+            // Bar Progres Visual Penanganan Laporan
+            LinearProgressIndicator(
+                progress = { progressValue },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(3.dp))
+            )
 
             Text(
                 text = report.deskripsi,
@@ -292,6 +426,86 @@ private fun AdminReportItemCard(
                 color = MaterialTheme.colorScheme.secondary
             )
 
+            HorizontalDivider()
+
+            // Panel Ubah Progres 1-Klik (Sedang Ditinjau -> Sedang Diproses -> Sudah Selesai)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    .padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = stringResource(id = R.string.admin_quick_progress_label),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    FilterChip(
+                        selected = currentStatus == ReportStatus.DIVERIFIKASI,
+                        onClick = {
+                            if (currentStatus != ReportStatus.DIVERIFIKASI) {
+                                onQuickProgressChange(ReportStatus.DIVERIFIKASI)
+                            }
+                        },
+                        enabled = !isUpdating,
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.RateReview,
+                                contentDescription = null,
+                                modifier = Modifier.size(FilterChipDefaults.IconSize)
+                            )
+                        },
+                        label = { Text(stringResource(id = R.string.admin_step_reviewing)) }
+                    )
+
+                    FilterChip(
+                        selected = currentStatus == ReportStatus.DIKERJAKAN,
+                        onClick = {
+                            if (currentStatus != ReportStatus.DIKERJAKAN) {
+                                onQuickProgressChange(ReportStatus.DIKERJAKAN)
+                            }
+                        },
+                        enabled = !isUpdating,
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Build,
+                                contentDescription = null,
+                                modifier = Modifier.size(FilterChipDefaults.IconSize)
+                            )
+                        },
+                        label = { Text(stringResource(id = R.string.admin_step_processing)) }
+                    )
+
+                    FilterChip(
+                        selected = currentStatus == ReportStatus.SELESAI,
+                        onClick = {
+                            if (currentStatus != ReportStatus.SELESAI) {
+                                onQuickProgressChange(ReportStatus.SELESAI)
+                            }
+                        },
+                        enabled = !isUpdating,
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                modifier = Modifier.size(FilterChipDefaults.IconSize)
+                            )
+                        },
+                        label = { Text(stringResource(id = R.string.admin_step_completed)) }
+                    )
+                }
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -328,11 +542,23 @@ private fun AdminManageReportDialog(
     ) -> Unit
 ) {
     val currentStatus = report.statusEnum
-    val validNextStatuses = remember(currentStatus) {
-        StatusTransitionRules.nextValidStatuses(currentStatus).toList()
+    val selectableStatuses = remember {
+        listOf(
+            ReportStatus.DIVERIFIKASI, // Sedang Ditinjau
+            ReportStatus.DIKERJAKAN,   // Sedang Diproses
+            ReportStatus.SELESAI,      // Sudah Selesai
+            ReportStatus.DITOLAK       // Ditolak
+        )
     }
     var selectedStatus by remember(currentStatus) {
-        mutableStateOf(validNextStatuses.firstOrNull() ?: currentStatus)
+        mutableStateOf(
+            when (currentStatus) {
+                ReportStatus.DITERIMA -> ReportStatus.DIVERIFIKASI
+                ReportStatus.DIVERIFIKASI -> ReportStatus.DIKERJAKAN
+                ReportStatus.DIKERJAKAN -> ReportStatus.SELESAI
+                else -> currentStatus
+            }
+        )
     }
     var selectedPriority by remember(report.prioritas) {
         mutableStateOf(report.priorityEnum)
@@ -341,7 +567,6 @@ private fun AdminManageReportDialog(
         mutableStateOf(report.assignedTo)
     }
     var catatan by remember { mutableStateOf("") }
-    var noteError by remember { mutableStateOf<String?>(null) }
 
     var priorityDropdownExpanded by remember { mutableStateOf(false) }
     var techDropdownExpanded by remember { mutableStateOf(false) }
@@ -364,36 +589,22 @@ private fun AdminManageReportDialog(
                     fontWeight = FontWeight.SemiBold
                 )
 
-                // Pilihan transisi status yang valid saja (dari StatusTransitionRules)
                 Text(
                     text = stringResource(id = R.string.admin_label_next_status),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary
                 )
 
-                if (validNextStatuses.isEmpty()) {
-                    Text(
-                        text = stringResource(
-                            id = R.string.admin_no_valid_transition,
-                            currentStatus.label
-                        ),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else {
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        // Opsi tetap pada status saat ini (mis. hanya ubah prioritas/teknisi) + status transisi valid
-                        val options = listOf(currentStatus) + validNextStatuses
-                        options.distinct().forEach { statusOption ->
-                            FilterChip(
-                                selected = selectedStatus == statusOption,
-                                onClick = { selectedStatus = statusOption },
-                                label = { Text(statusOption.label) }
-                            )
-                        }
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    selectableStatuses.forEach { statusOption ->
+                        FilterChip(
+                            selected = selectedStatus == statusOption,
+                            onClick = { selectedStatus = statusOption },
+                            label = { Text(statusOption.label) }
+                        )
                     }
                 }
 
@@ -430,7 +641,7 @@ private fun AdminManageReportDialog(
                     }
                 }
 
-                // Penugasan Teknisi (Bisa pilih dari daftar akun TEKNISI di Firestore atau ketik manual)
+                // Penugasan Teknisi / Petugas
                 ExposedDropdownMenuBox(
                     expanded = techDropdownExpanded && technicians.isNotEmpty(),
                     onExpandedChange = {
@@ -473,20 +684,13 @@ private fun AdminManageReportDialog(
                     }
                 }
 
-                // Catatan Perubahan Status
+                // Catatan Progres Status (Jika dikosongkan akan terisi otomatis sesuai progres)
                 OutlinedTextField(
                     value = catatan,
-                    onValueChange = {
-                        catatan = it
-                        noteError = null
-                    },
+                    onValueChange = { catatan = it },
                     label = { Text(stringResource(id = R.string.admin_label_history_note)) },
                     placeholder = { Text(stringResource(id = R.string.admin_hint_history_note)) },
                     minLines = 3,
-                    isError = noteError != null,
-                    supportingText = {
-                        noteError?.let { Text(it) }
-                    },
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -494,11 +698,7 @@ private fun AdminManageReportDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    if (catatan.trim().isEmpty()) {
-                        noteError = "Catatan perubahan status wajib diisi."
-                    } else {
-                        onSave(selectedStatus, selectedPriority, assignedToText, catatan)
-                    }
+                    onSave(selectedStatus, selectedPriority, assignedToText, catatan)
                 },
                 enabled = !isUpdating
             ) {

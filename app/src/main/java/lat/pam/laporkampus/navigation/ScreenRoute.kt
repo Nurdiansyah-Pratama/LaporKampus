@@ -34,6 +34,7 @@ object RoleGuard {
         ),
         UserRole.ADMIN to setOf(
             ScreenRoute.AdminDashboard.route,
+            ScreenRoute.SatgasReports.route,
             ScreenRoute.ReportDetail.route,
             ScreenRoute.Profile.route
         ),
@@ -44,6 +45,7 @@ object RoleGuard {
         ),
         UserRole.SATGAS to setOf(
             ScreenRoute.SatgasReports.route,
+            ScreenRoute.AdminDashboard.route,
             ScreenRoute.ReportDetail.route,
             ScreenRoute.Profile.route
         )

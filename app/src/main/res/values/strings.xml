@@ -7,11 +7,11 @@
 
     <!-- Autentikasi (Login & Registrasi) -->
     <string name="auth_login_title">Masuk ke LaporKampus</string>
-    <string name="auth_login_subtitle">Silakan masuk menggunakan akun kampus Anda</string>
+    <string name="auth_login_subtitle">Masuk dengan Email Mahasiswa atau ID Petugas (Admin / Satgas)</string>
     <string name="auth_register_title">Daftar Akun Mahasiswa</string>
     <string name="auth_register_subtitle">Registrasi mandiri khusus untuk peran Mahasiswa</string>
     <string name="auth_label_name">Nama Lengkap</string>
-    <string name="auth_label_email">Alamat Email</string>
+    <string name="auth_label_email">Email atau ID Pengguna (NIM / NIP)</string>
     <string name="auth_label_password">Kata Sandi</string>
     <string name="auth_label_confirm_password">Konfirmasi Kata Sandi</string>
     <string name="auth_btn_login">Masuk</string>
@@ -20,6 +20,9 @@
     <string name="auth_to_register_prompt">Belum punya akun? Daftar sebagai Mahasiswa</string>
     <string name="auth_to_login_prompt">Sudah punya akun? Masuk di sini</string>
     <string name="auth_role_locked_info">Catatan Keamanan: Pendaftaran dari aplikasi otomatis menetapkan peran sebagai MAHASISWA. Peran ADMIN, TEKNISI, dan SATGAS hanya dapat ditetapkan oleh pengelola sistem.</string>
+    <string name="auth_seed_card_title">Akun Seed Petugas (Admin / Satgas)</string>
+    <string name="auth_seed_card_desc">ID Pengguna: 1237050139  •  Kata Sandi: admin123</string>
+    <string name="auth_btn_use_seed">Isi &amp; Masuk sebagai Admin / Satgas</string>
 
     <!-- Validasi Input Auth -->
     <string name="error_name_empty">Nama lengkap tidak boleh kosong</string>
@@ -104,23 +107,28 @@
     <string name="error_report_not_found">Laporan tidak ditemukan atau telah dihapus.</string>
 
     <!-- Sprint 4: Dasbor Admin & Tugas Teknisi -->
-    <string name="admin_dashboard_title">Dasbor Admin Kampus</string>
-    <string name="admin_dashboard_subtitle">Verifikasi laporan fasilitas, atur prioritas, dan tugaskan teknisi</string>
-    <string name="admin_stats_section_title">Ringkasan Jumlah Laporan per Status</string>
+    <string name="admin_dashboard_title">Portal Petugas Admin &amp; Satgas</string>
+    <string name="admin_dashboard_subtitle">Pusat pemrosesan laporan kampus: ubah progres dari Sedang Ditinjau, Sedang Diproses, hingga Sudah Selesai</string>
+    <string name="admin_portal_badge">PUSAT KENDALI PETUGAS • ID: 1237050139</string>
+    <string name="admin_quick_progress_label">Ubah Progres Laporan Cepat:</string>
+    <string name="admin_step_reviewing">1. Sedang Ditinjau</string>
+    <string name="admin_step_processing">2. Sedang Diproses</string>
+    <string name="admin_step_completed">3. Sudah Selesai</string>
+    <string name="admin_stats_section_title">Ringkasan Progres Laporan</string>
     <string name="admin_filter_all">Semua (%1$d)</string>
     <string name="admin_empty_reports">Belum ada laporan fasilitas yang masuk untuk filter ini.</string>
-    <string name="admin_btn_manage_report">Kelola &amp; Ubah Status</string>
+    <string name="admin_btn_manage_report">Proses Detail &amp; Catatan</string>
     <string name="admin_btn_view_detail">Lihat Detail &amp; Linimasa</string>
-    <string name="admin_dialog_title">Kelola Laporan</string>
-    <string name="admin_label_current_status">Status Saat Ini: %1$s</string>
-    <string name="admin_label_next_status">Pilih Transisi Status Berikutnya</string>
-    <string name="admin_no_valid_transition">Status laporan ini sudah bersifat akhir (%1$s) dan tidak dapat diubah lagi.</string>
+    <string name="admin_dialog_title">Proses &amp; Ubah Progres Laporan</string>
+    <string name="admin_label_current_status">Progres Saat Ini: %1$s</string>
+    <string name="admin_label_next_status">Pilih Progres / Status Laporan</string>
+    <string name="admin_no_valid_transition">Status laporan ini sudah bersifat akhir (%1$s).</string>
     <string name="admin_label_priority">Tingkat Prioritas</string>
-    <string name="admin_label_assign_tech">Tugaskan Teknisi (Pilih atau Ketik Nama/ID Teknisi)</string>
-    <string name="admin_hint_assign_tech">Contoh: Budi Teknisi Listrik (uid_teknisi)</string>
-    <string name="admin_label_history_note">Catatan Riwayat Status</string>
-    <string name="admin_hint_history_note">Contoh: Laporan telah diverifikasi dan ditugaskan ke teknisi gedung.</string>
-    <string name="admin_btn_save_changes">Simpan Perubahan</string>
+    <string name="admin_label_assign_tech">Penanggung Jawab / Teknisi</string>
+    <string name="admin_hint_assign_tech">Contoh: Tim Teknisi Gedung / Satgas (opsional)</string>
+    <string name="admin_label_history_note">Catatan Progres Penanganan</string>
+    <string name="admin_hint_history_note">Contoh: Laporan sedang ditinjau dan tim sedang menuju lokasi.</string>
+    <string name="admin_btn_save_changes">Simpan Progres</string>
     <string name="admin_btn_cancel">Batal</string>
     <string name="admin_update_success">Status, prioritas, dan penugasan laporan berhasil diperbarui.</string>
     <string name="error_invalid_status_transition">Transisi status dari %1$s ke %2$s tidak diizinkan oleh aturan sistem.</string>

@@ -181,6 +181,15 @@ fun SatgasReportsScreen(
                         SatgasReportCard(
                             report = report,
                             viewer = currentUser,
+                            isUpdating = uiState.isUpdating,
+                            onQuickProgressChange = { targetStatus ->
+                                onUpdateSensitiveReport(
+                                    report,
+                                    targetStatus,
+                                    report.priorityEnum,
+                                    ""
+                                )
+                            },
                             onViewDetailClick = { onOpenDetail(report.id) },
                             onUpdateClick = { reportToUpdate = report }
                         )
@@ -209,6 +218,8 @@ fun SatgasReportsScreen(
 private fun SatgasReportCard(
     report: Report,
     viewer: UserProfile,
+    isUpdating: Boolean,
+    onQuickProgressChange: (ReportStatus) -> Unit,
     onViewDetailClick: () -> Unit,
     onUpdateClick: () -> Unit
 ) {
@@ -217,6 +228,7 @@ private fun SatgasReportCard(
         viewerRole = viewer.roleEnum,
         viewerUserId = viewer.id
     )
+    val currentStatus = report.statusEnum
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -288,6 +300,49 @@ private fun SatgasReportCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
+            Text(
+                text = stringResource(id = R.string.admin_quick_progress_label),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                FilterChip(
+                    selected = currentStatus == ReportStatus.DIVERIFIKASI,
+                    onClick = {
+                        if (currentStatus != ReportStatus.DIVERIFIKASI) {
+                            onQuickProgressChange(ReportStatus.DIVERIFIKASI)
+                        }
+                    },
+                    enabled = !isUpdating,
+                    label = { Text(stringResource(id = R.string.admin_step_reviewing)) }
+                )
+                FilterChip(
+                    selected = currentStatus == ReportStatus.DIKERJAKAN,
+                    onClick = {
+                        if (currentStatus != ReportStatus.DIKERJAKAN) {
+                            onQuickProgressChange(ReportStatus.DIKERJAKAN)
+                        }
+                    },
+                    enabled = !isUpdating,
+                    label = { Text(stringResource(id = R.string.admin_step_processing)) }
+                )
+                FilterChip(
+                    selected = currentStatus == ReportStatus.SELESAI,
+                    onClick = {
+                        if (currentStatus != ReportStatus.SELESAI) {
+                            onQuickProgressChange(ReportStatus.SELESAI)
+                        }
+                    },
+                    enabled = !isUpdating,
+                    label = { Text(stringResource(id = R.string.admin_step_completed)) }
+                )
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -322,11 +377,23 @@ private fun SatgasUpdateDialog(
     ) -> Unit
 ) {
     val currentStatus = report.statusEnum
-    val validNextStatuses = remember(currentStatus) {
-        StatusTransitionRules.nextValidStatuses(currentStatus).toList()
+    val selectableStatuses = remember {
+        listOf(
+            ReportStatus.DIVERIFIKASI, // Sedang Ditinjau
+            ReportStatus.DIKERJAKAN,   // Sedang Diproses
+            ReportStatus.SELESAI,      // Sudah Selesai
+            ReportStatus.DITOLAK       // Ditolak
+        )
     }
     var selectedStatus by remember(currentStatus) {
-        mutableStateOf(validNextStatuses.firstOrNull() ?: currentStatus)
+        mutableStateOf(
+            when (currentStatus) {
+                ReportStatus.DITERIMA -> ReportStatus.DIVERIFIKASI
+                ReportStatus.DIVERIFIKASI -> ReportStatus.DIKERJAKAN
+                ReportStatus.DIKERJAKAN -> ReportStatus.SELESAI
+                else -> currentStatus
+            }
+        )
     }
     var selectedPriority by remember(report.prioritas) {
         mutableStateOf(report.priorityEnum)
@@ -362,28 +429,16 @@ private fun SatgasUpdateDialog(
                     color = MaterialTheme.colorScheme.primary
                 )
 
-                if (validNextStatuses.isEmpty()) {
-                    Text(
-                        text = stringResource(
-                            id = R.string.admin_no_valid_transition,
-                            currentStatus.label
-                        ),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else {
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        val options = (listOf(currentStatus) + validNextStatuses).distinct()
-                        options.forEach { option ->
-                            FilterChip(
-                                selected = selectedStatus == option,
-                                onClick = { selectedStatus = option },
-                                label = { Text(option.label) }
-                            )
-                        }
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    selectableStatuses.forEach { option ->
+                        FilterChip(
+                            selected = selectedStatus == option,
+                            onClick = { selectedStatus = option },
+                            label = { Text(option.label) }
+                        )
                     }
                 }
 

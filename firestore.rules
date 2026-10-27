@@ -117,13 +117,20 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
+    // Memeriksa apakah akun menggunakan email staf bawaan (seed Admin/Satgas: 1237050139)
+    function isSeedStaffEmail() {
+      return isAuthenticated() &&
+        'email' in request.auth.token &&
+        request.auth.token.email == '1237050139@laporkampus.ac.id';
+    }
+
     // Memeriksa apakah pengguna memiliki peran tertentu di `users/{uid}`
     function hasRole(roleName) {
       return hasUserProfile() && getUserData().peran == roleName;
     }
 
     function isAdmin() {
-      return hasRole('ADMIN');
+      return isSeedStaffEmail() || hasRole('ADMIN');
     }
 
     function isTeknisi() {
@@ -131,11 +138,12 @@ service cloud.firestore {
     }
 
     function isSatgas() {
-      return hasRole('SATGAS');
+      return isSeedStaffEmail() || hasRole('SATGAS');
     }
 
     function isStaff() {
-      return hasUserProfile() && getUserData().peran in ['ADMIN', 'TEKNISI', 'SATGAS'];
+      return isSeedStaffEmail() ||
+        (hasUserProfile() && getUserData().peran in ['ADMIN', 'TEKNISI', 'SATGAS']);
     }
 
     // ===============================================================
@@ -197,13 +205,13 @@ service cloud.firestore {
     }
 
     // Validasi aturan siklus transisi status laporan:
-    // - DITERIMA -> DIVERIFIKASI, DITOLAK (atau tetap DITERIMA saat hanya update prioritas/assignedTo)
+    // - DITERIMA -> DIVERIFIKASI (Sedang Ditinjau), DIKERJAKAN (Sedang Diproses), DITOLAK (atau tetap DITERIMA)
     // - DIVERIFIKASI -> DIKERJAKAN, DITOLAK, SELESAI (atau tetap DIVERIFIKASI)
-    // - DIKERJAKAN -> SELESAI (atau tetap DIKERJAKAN)
+    // - DIKERJAKAN -> DIVERIFIKASI, DITOLAK, SELESAI (atau tetap DIKERJAKAN)
     function isValidStatusTransition(oldStatus, newStatus) {
-      return (oldStatus == 'DITERIMA' && newStatus in ['DITERIMA', 'DIVERIFIKASI', 'DITOLAK']) ||
+      return (oldStatus == 'DITERIMA' && newStatus in ['DITERIMA', 'DIVERIFIKASI', 'DIKERJAKAN', 'DITOLAK']) ||
         (oldStatus == 'DIVERIFIKASI' && newStatus in ['DIVERIFIKASI', 'DIKERJAKAN', 'DITOLAK', 'SELESAI']) ||
-        (oldStatus == 'DIKERJAKAN' && newStatus in ['DIKERJAKAN', 'SELESAI']);
+        (oldStatus == 'DIKERJAKAN' && newStatus in ['DIKERJAKAN', 'DIVERIFIKASI', 'DITOLAK', 'SELESAI']);
     }
 
     // Validasi skema dokumen `reports/{reportId}/history/{historyId}`
@@ -244,19 +252,21 @@ service cloud.firestore {
 
       // ATURAN KEAMANAN #1 (Kunci Registrasi Mandiri Peran):
       // Registrasi dari aplikasi hanya diizinkan membuat dokumen milik sendiri (`request.auth.uid == userId`)
-      // dengan `peran == 'MAHASISWA'`. Pengguna TIDAK DAPAT memilih sendiri peran ADMIN, TEKNISI, atau SATGAS.
+      // dengan `peran == 'MAHASISWA'`. Pengguna biasa TIDAK DAPAT memilih sendiri peran ADMIN, TEKNISI, atau SATGAS.
+      // Akun staf bawaan (`isSeedStaffEmail()`) atau `isAdmin()` diizinkan menginisialisasi profil staf.
       allow create: if isAuthenticated() &&
         isValidUser(request.resource.data) &&
         request.resource.data.id == userId &&
         (
           (isOwner(userId) && request.resource.data.peran == 'MAHASISWA') ||
-          isAdmin()
+          isAdmin() ||
+          isSeedStaffEmail()
         );
 
       // Pembaruan profil pengguna:
       // - Pemilik akun hanya boleh memperbarui profilnya (mis. `nama`, `fcmToken`) JIKA `peran` tidak berubah
       //   (mencegah eskalasi hak akses mandiri).
-      // - Pengguna dengan peran ADMIN dapat memperbarui peran pengguna bila diperlukan.
+      // - Pengguna dengan peran ADMIN atau akun staf bawaan dapat memperbarui peran pengguna bila diperlukan.
       allow update: if isAuthenticated() &&
         isValidUser(request.resource.data) &&
         request.resource.data.id == resource.data.id &&
@@ -264,7 +274,8 @@ service cloud.firestore {
           (isOwner(userId) &&
             request.resource.data.peran == resource.data.peran &&
             request.resource.data.email == resource.data.email) ||
-          isAdmin()
+          isAdmin() ||
+          isSeedStaffEmail()
         );
 
       allow delete: if isAdmin();
